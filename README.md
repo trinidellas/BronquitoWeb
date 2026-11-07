@@ -64,11 +64,7 @@ Con todo levantado:
 docker compose exec db mysql --default-character-set=utf8mb4 -ubronquito -p bronquito
 ```
 
-Pide la `MYSQL_PASSWORD` del `.env`. Ojo que la tabla de pacientes se llama `usuarios`.
+Pide la `MYSQL_PASSWORD` del `.env`. La tabla de pacientes se llama `usuarios`.
 
 También se puede ver desde VS Code con la extensión SQLTools. La conexión ya está configurada en `.vscode/settings.json`.
 
-## Más info
-
-- `DISPOSITIVO.md`: los mensajes entre la ESP32 y la API.
-- `backend/README.md`: las tablas, los endpoints y cómo se mandan los mails.
