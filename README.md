@@ -1,96 +1,74 @@
 # Bronquito
 
-Plataforma web del dispositivo portátil de entrenamiento y evaluación de músculos
-inspiratorios (IMT) "Bronquito" — proyecto de Instrumentación Biomédica.
+Página web del Bronquito, el dispositivo portátil para entrenar y evaluar los músculos inspiratorios (IMT). Es parte del proyecto de Instrumentación Biomédica.
 
-Monorepo con tres partes:
+La usan pacientes y médicos:
+
+- Los pacientes se registran con un nombre de usuario y un PIN de 4 dígitos. Desde la web ven sus evaluaciones y entrenamientos, la frecuencia que les recomendó el médico y quiénes son sus médicos. También pueden editar sus datos y ver los videos tutoriales.
+- Los médicos se registran con mail y contraseña. Para vincular a un paciente tienen que poner su usuario y su PIN. Pueden ver los gráficos de cada evaluación, dejar notas en los gráficos o en una sesión, cambiar la frecuencia recomendada y exportar los datos a PDF o CSV.
+- Desde la web el médico también maneja el dispositivo: le asigna un paciente, lo formatea o le cambia el usuario. La ESP32 se conecta a la API por WiFi, levanta esos pedidos y sube las pruebas que tiene guardadas en la microSD.
+- Si alguien se olvida la contraseña o el PIN, le llega un mail con un link para cambiarlo.
+
+## Estructura
 
 ```
-bronquito/
-  frontend/     React + TypeScript + Vite (la web que usan pacientes y médicos)
-  backend/      Python + FastAPI (la API)
-  docker-compose.yml   Levanta frontend + backend + MySQL juntos
+frontend/            React + TypeScript + Vite
+backend/             Python + FastAPI (la API)
+docker-compose.yml   levanta la web, la API y MySQL
+levantar.sh          script para levantar todo
+DISPOSITIVO.md       cómo se comunica la ESP32 con la API
 ```
 
-Si es tu primera vez acá, andá directo a **`DOCKER.md`** — es la forma más rápida de ver
-todo funcionando sin instalar Node, Python ni MySQL en tu máquina.
+## Cómo levantarlo
 
-## Arrancar en 3 pasos
+Hace falta tener Docker Desktop instalado y abierto.
+
+1. Copiar el archivo de variables de entorno:
+
+   ```bash
+   cp .env.example .env
+   ```
+
+   En el `.env` hay que completar los datos del mail (`SMTP_USER`, `SMTP_PASSWORD`) y la `DEVICE_API_KEY`, que tiene que ser la misma clave que tiene cargada el firmware de la ESP.
+
+2. Levantar todo desde la carpeta raíz:
+
+   ```bash
+   ./levantar.sh --build
+   ```
+
+   El `--build` va la primera vez o cuando cambiás código. Si no, alcanza con `./levantar.sh`.
+
+3. Abrir:
+   - http://localhost:5173 para la web
+   - http://localhost:8000/docs para la documentación de la API
+
+El script detecta la IP de la compu en la red y se la pasa a la API. El último número de esa IP es el código que hay que poner en la ESP para que se conecte, y en la web aparece en "Conectar a dispositivo". La compu y la ESP tienen que estar en la misma red WiFi. En la facultad no funciona porque la red bloquea la conexión entre equipos, así que usamos el hotspot del celular.
+
+Si no vas a usar la ESP, también se puede levantar con `docker compose up --build`, pero así la web no muestra el código.
+
+Como el script deja todo corriendo de fondo, los logs se ven con `docker compose logs -f api`. Para apagar todo: `docker compose down`. Con `docker compose down -v` además se borra la base de datos.
+
+## Usuarios de prueba
+
+La primera vez que arranca con la base vacía, la API crea las tablas y carga datos de ejemplo (`backend/app/seed.py`):
+
+- Médico: `belen.fernandez@bronquito.app` / `medico1234`
+- Pacientes (usuario / PIN): `msalerno` / `1234`, `therrera` / `5678`, `rfernandez` / `4321`
+
+## Ver la base de datos
+
+Con todo levantado:
 
 ```bash
-cp .env.example .env
-docker compose up --build
+docker compose exec db mysql --default-character-set=utf8mb4 -ubronquito -p bronquito
 ```
 
-Después abrí:
-- http://localhost:5173 — la web
-- http://localhost:8000/docs — la API (documentación interactiva)
+Pide la `MYSQL_PASSWORD` del `.env`. Ojo que la tabla de pacientes se llama `usuarios`.
 
-Guía detallada, con capturas de qué esperar y solución de problemas comunes, en
-`DOCKER.md`.
+También se puede ver desde VS Code con la extensión SQLTools. La conexión ya está configurada en `.vscode/settings.json`.
 
-## Configurar VS Code
+## Más info
 
-1. Abrí la carpeta `bronquito/` (esta, la raíz) como carpeta de proyecto en VS Code —
-   `Archivo → Abrir carpeta…`. Al tener `frontend/` y `backend/` adentro, VS Code va a
-   poder editar y darte autocompletado en ambos.
-2. Al abrir el proyecto, VS Code te va a sugerir instalar un paquete de extensiones
-   recomendadas (definidas en `.vscode/extensions.json`) — aceptá esa notificación. Si no
-   aparece, andá a la pestaña de Extensiones (ícono de cuadraditos a la izquierda) y
-   buscá "@recommended" en la barra de búsqueda. Las principales:
-   - **Python** + **Pylance** (Microsoft) — autocompletado y chequeo de tipos en el
-     backend.
-   - **ESLint** + **Prettier** — lo mismo pero para el frontend en TypeScript/React.
-   - **SQLTools** + **SQLTools MySQL/MariaDB Driver** — para ver las tablas de MySQL
-     desde adentro de VS Code, sin instalar un programa aparte. La conexión a la base ya
-     viene precargada en `.vscode/settings.json` apuntando a `localhost:3306`; sólo te va
-     a pedir la contraseña (la que pusiste en tu `.env`) la primera vez que te conectes.
-   - **Docker** (Microsoft) — te deja ver y controlar los contenedores desde una pestaña
-     lateral, en vez de la terminal.
-3. **Si vas a programar el backend en Python** (con o sin Docker corriendo), conviene que
-   VS Code use el intérprete de Python correcto: `Ctrl+Shift+P` (o `Cmd+Shift+P` en Mac) →
-   escribí "Python: Select Interpreter" → elegí el que esté dentro de
-   `backend/.venv` (lo creás siguiendo `backend/README.md`, sección "Correr sin Docker").
-   Sin esto, Pylance no va a encontrar `fastapi`, `sqlalchemy`, etc. y te va a marcar todo
-   en rojo aunque el código esté bien.
-
-Con esto ya podés editar frontend y backend desde la misma ventana de VS Code, con
-autocompletado en los dos, mientras `docker compose up` corre en una terminal aparte (o
-en la terminal integrada de VS Code, `` Ctrl+` ``).
-
-## Cómo se relacionan las tres partes
-
-- **`frontend/`** ya usa la API real para **login / registro / recuperación de contraseña
-  y PIN** (`frontend/src/api/` + `frontend/src/auth/`). El **dashboard** (vistas paciente y
-  médico) todavía usa datos mock (`frontend/src/data/mockData.ts`) — es lo próximo a
-  conectar (ver "Próximo paso" abajo).
-- **`backend/`** expone esos mismos datos (mismos pacientes, mismos IDs) a través de una
-  API REST documentada en `/docs`. Mirá `backend/README.md` para la lista de endpoints.
-- **MySQL** guarda todo. Sus datos persisten en un volumen de Docker (`mysql_data`) entre
-  reinicios — no se pierden cada vez que apagás los contenedores, salvo que corras
-  `docker compose down -v` a propósito. Para **mirar qué hay en las tablas** (por terminal,
-  desde VS Code, o con un cliente tipo DBeaver) hay instrucciones en
-  `backend/README.md`, sección "Ver los datos de las tablas".
-
-## Próximo paso sugerido: conectar el dashboard a la API
-
-El login ya está conectado (hay cliente HTTP en `frontend/src/api/` y sesión en
-`frontend/src/auth/`). Falta el dashboard — a grandes rasgos:
-
-1. Reconciliar `frontend/src/types/index.ts` con los schemas del backend
-   (`backend/app/schemas/`): hoy **no coinciden** — el mock tiene `nombre`/`edad`/
-   `diagnostico`, el backend tiene `nombre_usuario`/`altura_cm`/`peso_kg`/`fecha_nacimiento`/`sexo`/
-   `fumador`.
-2. Crear en el backend los endpoints de evaluaciones / entrenamientos / rutina / notas
-   médicas (por ahora sólo están las tablas).
-3. Reemplazar, una función a la vez, las de `mockData.ts` (`pacientesDeMedico`,
-   `evaluacionesDe`, etc.) por llamadas a la API, manejando estados de "cargando"/"error".
-
-## Qué falta para producción (repaso)
-
-- Migraciones de base de datos con Alembic en vez de recrear tablas al arrancar.
-- Mandar por mail (no en la respuesta HTTP) el link de "olvidé mi contraseña / PIN".
-- Dockerfiles de producción (build optimizado + nginx para el frontend, uvicorn sin
-  `--reload` para la API) en vez de los actuales, pensados sólo para desarrollo.
-- Sincronización real del dispositivo → base de datos (fuera del alcance de este repo,
-  que sólo consume datos ya sincronizados).
+- `DISPOSITIVO.md`: los mensajes entre la ESP32 y la API.
+- `backend/README.md`: las tablas, los endpoints y cómo se mandan los mails.
