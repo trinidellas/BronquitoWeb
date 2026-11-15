@@ -1,9 +1,10 @@
-import type { Anotacion, Entrenamiento, Evaluacion } from '../../api/types'
+import type { Anotacion, Entrenamiento, EntrenamientoConFecha, Evaluacion } from '../../api/types'
 import type { SerieTendencia } from '../../components/ui/TrendChartCarousel'
 import { notaParaCsv } from '../../anotaciones/notas'
 import { claveGraficoEvolucion } from '../../anotaciones/useAnotaciones'
 import { formatearFecha } from '../../data/mockData'
 import { aCsv } from '../../exportar/archivos'
+import { pimClinica } from './entrenamiento/formato'
 
 /**
  * Qué se grafica en la evolución del paciente, en un solo lugar: lo usan la
@@ -53,17 +54,19 @@ export const VARIABLES_EVALUACION: VariableEvolucion<Evaluacion>[] = [
   { id: 'fiv1', nombreCorto: 'FIV1', etiqueta: 'FIV1', etiquetaEje: 'FIV1 (L)', unidad: 'L', valor: (e) => e.fiv1 },
 ]
 
+/**
+ * Evolución entre sesiones de entrenamiento. PIM con la convención clínica
+ * (negativa); caída de la PIM > 0 = cayó. Las sesiones sin análisis no
+ * aportan puntos (sus valores son null).
+ */
 export const VARIABLES_ENTRENAMIENTO: VariableEvolucion<Entrenamiento>[] = [
-  { id: 'resistencia', nombreCorto: 'Resistencia', etiqueta: 'resistencia programada', etiquetaEje: 'Resistencia', unidad: '', valor: (e) => e.resistencia_programada },
-  { id: 'repeticiones', nombreCorto: 'Repeticiones', etiqueta: 'repeticiones programadas', etiquetaEje: 'Repeticiones', unidad: '', valor: (e) => e.repeticiones_programadas },
-  { id: 'presion-max', nombreCorto: 'Presión máx.', etiqueta: 'presión máxima', etiquetaEje: 'Presión máx. (cmH₂O)', unidad: 'cmH₂O', valor: (e) => e.presion_max },
-  { id: 'presion-prom', nombreCorto: 'Presión prom.', etiqueta: 'presión promedio', etiquetaEje: 'Presión prom. (cmH₂O)', unidad: 'cmH₂O', valor: (e) => e.presion_promedio },
-  { id: 'indice-fatiga', nombreCorto: 'Índice de fatiga', etiqueta: 'índice de fatiga', etiquetaEje: 'Índice de fatiga (%)', unidad: '%', valor: (e) => e.indice_fatiga },
-  { id: 'potencia', nombreCorto: 'Potencia', etiqueta: 'potencia inspiratoria', etiquetaEje: 'Potencia insp. (W)', unidad: 'W', valor: (e) => e.potencia_insp },
-  { id: 'trabajo', nombreCorto: 'Trabajo', etiqueta: 'trabajo', etiquetaEje: 'Trabajo (J)', unidad: 'J', valor: (e) => e.trabajo },
-  { id: 'duty-cycle', nombreCorto: 'Duty cycle', etiqueta: 'duty cycle', etiquetaEje: 'Duty cycle (%)', unidad: '%', valor: (e) => e.duty_cycle },
-  { id: 'tiempo-entre-reps', nombreCorto: 'Tiempo entre reps', etiqueta: 'tiempo entre repeticiones', etiquetaEje: 'Tiempo entre reps (s)', unidad: 's', valor: (e) => e.tiempo_entre_reps },
-  { id: 'volumen-total', nombreCorto: 'Volumen total', etiqueta: 'volumen total', etiquetaEje: 'Volumen total (L)', unidad: 'L', valor: (e) => e.volumen_total },
+  { id: 'pim-promedio', nombreCorto: 'PIM prom.', etiqueta: 'PIM promedio', etiquetaEje: 'PIM promedio (cmH₂O)', unidad: 'cmH₂O', valor: (e) => pimClinica(e.promedios?.pim_cmH2O) },
+  { id: 'vol-insp-promedio', nombreCorto: 'Vol. insp. prom.', etiqueta: 'volumen inspirado promedio', etiquetaEje: 'Vol. inspirado prom. (L)', unidad: 'L', valor: (e) => e.promedios?.vol_insp_L },
+  { id: 'trabajo-total', nombreCorto: 'Trabajo total', etiqueta: 'trabajo inspiratorio total', etiquetaEje: 'Trabajo total (J)', unidad: 'J', valor: (e) => e.multiciclo?.trabajo_total_insp_J },
+  { id: 'ciclos-completos', nombreCorto: 'Ciclos', etiqueta: 'ciclos completos', etiquetaEje: 'Ciclos completos', unidad: '', valor: (e) => e.n_ciclos_completos },
+  { id: 'caida-pim', nombreCorto: 'Caída PIM', etiqueta: 'caída de la PIM', etiquetaEje: 'Caída de la PIM (%)', unidad: '%', valor: (e) => e.multiciclo?.caida_pim_pct },
+  { id: 'potencia-promedio', nombreCorto: 'Potencia', etiqueta: 'potencia inspiratoria promedio', etiquetaEje: 'Potencia insp. prom. (W)', unidad: 'W', valor: (e) => e.promedios?.potencia_insp_W },
+  { id: 'nivel-resistencia', nombreCorto: 'Resistencia', etiqueta: 'nivel de resistencia', etiquetaEje: 'Nivel de resistencia', unidad: '', valor: (e) => e.nivel_resistencia },
 ]
 
 /** Fecha y hora para el CSV y el detalle de un punto, ej. "2026-10-11 10:15". */
@@ -103,7 +106,7 @@ export function seriesDeEvaluaciones(evaluacionesCronologicas: Evaluacion[]): Se
   return construirSeries('evaluaciones', evaluacionesCronologicas, (e) => e.id_evaluacion, VARIABLES_EVALUACION)
 }
 
-export function seriesDeEntrenamientos(entrenamientosCronologicos: Entrenamiento[]): SerieTendencia[] {
+export function seriesDeEntrenamientos(entrenamientosCronologicos: EntrenamientoConFecha[]): SerieTendencia[] {
   return construirSeries('entrenamientos', entrenamientosCronologicos, (e) => e.id_entrenamiento, VARIABLES_ENTRENAMIENTO)
 }
 
@@ -149,7 +152,7 @@ export function csvDeEvaluaciones(evaluacionesCronologicas: Evaluacion[], anotac
   return csvDeEvolucion('evaluaciones', sesiones, VARIABLES_EVALUACION_CSV, (e) => e.id_evaluacion, anotaciones)
 }
 
-export function csvDeEntrenamientos(entrenamientosCronologicos: Entrenamiento[], anotaciones: Anotacion[]): string {
+export function csvDeEntrenamientos(entrenamientosCronologicos: EntrenamientoConFecha[], anotaciones: Anotacion[]): string {
   return csvDeEvolucion(
     'entrenamientos',
     entrenamientosCronologicos.map((e) => [e]),

@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react'
+import { useSearchParams } from 'react-router-dom'
 import { PatientListPanel } from './PatientListPanel'
 import { PatientDetail } from './PatientDetail'
 import { ConnectPatientModal } from './ConnectPatientModal'
@@ -44,7 +45,10 @@ export function DoctorView() {
   const [pacientes, setPacientes] = useState<Paciente[]>([])
   const [cargando, setCargando] = useState(true)
   const [error, setError] = useState('')
-  const [seleccionadoId, setSeleccionadoId] = useState<string | null>(null)
+  // El paciente elegido vive también en la URL (?paciente=3): así, al volver
+  // del visor de señales (o con "Atrás"), se vuelve al mismo paciente.
+  const [searchParams, setSearchParams] = useSearchParams()
+  const [seleccionadoId, setSeleccionadoId] = useState<string | null>(() => searchParams.get('paciente'))
   const [mostrarConectar, setMostrarConectar] = useState(false)
 
   useEffect(() => {
@@ -57,7 +61,9 @@ export function DoctorView() {
         if (cancelado) return
         const adaptados = datos.map(pacienteDesdeApi)
         setPacientes(adaptados)
-        setSeleccionadoId((actual) => actual ?? adaptados[0]?.id ?? null)
+        setSeleccionadoId((actual) =>
+          actual && adaptados.some((p) => p.id === actual) ? actual : (adaptados[0]?.id ?? null),
+        )
       })
       .catch((err) => {
         if (cancelado) return
@@ -71,6 +77,14 @@ export function DoctorView() {
       cancelado = true
     }
   }, [token])
+
+  useEffect(() => {
+    if (searchParams.get('paciente') === (seleccionadoId ?? null)) return
+    const nuevos = new URLSearchParams(searchParams)
+    if (seleccionadoId) nuevos.set('paciente', seleccionadoId)
+    else nuevos.delete('paciente')
+    setSearchParams(nuevos, { replace: true })
+  }, [seleccionadoId, searchParams, setSearchParams])
 
   const pacienteSeleccionado = pacientes.find((p) => p.id === seleccionadoId) ?? null
 

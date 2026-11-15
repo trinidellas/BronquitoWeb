@@ -6,8 +6,13 @@ crear las tablas, y para que las relaciones declaradas como strings
 """
 
 from app.models.anotacion import Anotacion
+from app.models.configuracion_dispositivo import (
+    ConfiguracionResistencia,
+    EcuacionPredichos,
+    FrecuenciaConfirmada,
+)
 from app.models.dispositivo import ArchivoDispositivo, Dispositivo, RegistroSync, SolicitudDispositivo
-from app.models.entrenamiento import Entrenamiento, EntrenamientoGraficar
+from app.models.entrenamiento import CicloEntrenamiento, Entrenamiento, EntrenamientoCsv, EntrenamientoJson
 from app.models.evaluacion import Evaluacion, EvaluacionMuestra
 from app.models.frecuencia_recomendada import FrecuenciaRecomendada
 from app.models.medico import Medico
@@ -23,7 +28,9 @@ __all__ = [
     "Evaluacion",  # tabla evaluaciones
     "EvaluacionMuestra",  # tabla evaluaciones_muestras
     "Entrenamiento",  # tabla entrenamientos
-    "EntrenamientoGraficar",  # tabla entrenamientos_graficar
+    "CicloEntrenamiento",  # tabla ciclos_entrenamiento (una fila por ciclo)
+    "EntrenamientoCsv",  # tabla entrenamientos_csv (señal de cada sesión)
+    "EntrenamientoJson",  # tabla entrenamientos_json (JSON original, respaldo)
     "Rutina",  # tabla rutina
     "NotaMedica",  # tabla notas_medicas
     # No es una de las 9 tablas del documento de arquitectura — es exclusiva
@@ -35,4 +42,8 @@ __all__ = [
     "SolicitudDispositivo",  # tabla solicitudes_dispositivo
     "RegistroSync",  # tabla registro_sync
     "ArchivoDispositivo",  # tabla archivos_dispositivo (pruebas subidas desde la SD)
+    # Configuración que viaja al equipo (ver app/models/configuracion_dispositivo.py).
+    "ConfiguracionResistencia",  # tabla configuracion_resistencia
+    "FrecuenciaConfirmada",  # tabla frecuencia_confirmada
+    "EcuacionPredichos",  # tabla ecuacion_predichos
 ]

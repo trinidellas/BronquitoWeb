@@ -91,7 +91,7 @@ export function PatientDashboard() {
   }, [token])
 
   const diasConEntrenamiento = useMemo(
-    () => new Set(entrenamientos.map((e) => e.fecha_hora.slice(0, 10))),
+    () => new Set(entrenamientos.flatMap((e) => (e.fecha_hora ? [e.fecha_hora.slice(0, 10)] : []))),
     [entrenamientos],
   )
   const diasConEvaluacion = useMemo(

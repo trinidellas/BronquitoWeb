@@ -45,6 +45,14 @@ class SubirEvaluacionRequest(BaseModel):
     csv: str | None = Field(default=None, max_length=500_000)
 
 
+class ConfirmarFrecuenciaRequest(BaseModel):
+    id_frecuencia: int
+
+
+class ConfirmarResistenciaRequest(BaseModel):
+    id_resistencia: int
+
+
 # --- Lo que manda la web del médico -------------------------------------------
 
 

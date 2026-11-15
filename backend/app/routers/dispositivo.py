@@ -13,12 +13,18 @@ Orden de una sincronización:
   1. POST /dispositivo/identificar  -> hora + cuántas solicitudes hay.
   2. POST /dispositivo/evaluaciones -> una vez por cada prueba de la SD que
      todavía no subió. Va antes de las solicitudes: un RESET se niega
-     mientras haya pruebas sin subir.
+     mientras haya pruebas sin subir. Lo mismo con los entrenamientos:
+     POST /dispositivo/entrenamientos (el JSON) y
+     POST /dispositivo/entrenamientos/csv (la señal) por cada sesión.
   3. GET  /dispositivo/solicitudes  -> la cola, en orden.
   4. Por cada una, el paciente toca ACEPTAR / RECHAZAR y la ESP llama a
      POST /dispositivo/solicitudes/{id}/confirmar.
   5. Vuelve a 3 hasta que la lista venga vacía (confirmar un RESET con
      "cambiar usuario" genera el CARGAR_PERFIL siguiente).
+
+Aparte, cuando entra a Configuración y antes de cada entrenamiento (si tiene
+conexión), la ESP pide GET /dispositivo/frecuencia: frecuencia, resistencia
+y valores predichos. Confirma por separado cada objeto que guardó.
 """
 
 import time
@@ -42,9 +48,12 @@ from app.core.dispositivo import (
     registrar,
     sin_acentos,
 )
+from app.core.entrenamientos_dispositivo import MAX_CSV_BYTES, guardar_csv, guardar_entrenamiento, leer_senal
 from app.core.evaluaciones_dispositivo import guardar_prueba
+from app.core.predichos import predichos
 from app.core.security import verificar_secreto
-from app.core.timezone import ARGENTINA
+from app.core.timezone import ARGENTINA, hoy_argentina
+from app.models.configuracion_dispositivo import ConfiguracionResistencia, FrecuenciaConfirmada
 from app.models.dispositivo import (
     ESTADOS_ACTIVOS,
     Dispositivo,
@@ -52,13 +61,17 @@ from app.models.dispositivo import (
     SolicitudDispositivo,
     TipoSolicitud,
 )
+from app.models.frecuencia_recomendada import FrecuenciaRecomendada
 from app.models.paciente import Paciente
 from app.schemas.dispositivo import (
+    ConfirmarFrecuenciaRequest,
     ConfirmarRequest,
+    ConfirmarResistenciaRequest,
     IdentificarRequest,
     SubirEvaluacionRequest,
     VerificarPinRequest,
 )
+from app.schemas.entrenamiento import SubirEntrenamientoRequest
 
 
 class RutaDispositivo(APIRoute):
@@ -334,6 +347,175 @@ def subir_evaluacion(payload: SubirEvaluacionRequest, db: Session = Depends(get_
         db, dispositivo, "PRUEBA_RECIBIDA",
         f"{payload.archivo} -> {resultado['estado']} visible={resultado['visible']} "
         f"evaluacion={resultado['id_evaluacion']}",
+    )
+    db.commit()
+    return {"ok": True, **resultado}
+
+
+# --- Configuración: frecuencia, resistencia y predichos ---------------------------
+
+
+def _paciente_del_pedido(usuario: str, dispositivo: Dispositivo, db: Session) -> Paciente:
+    """Como en verificar-pin: sólo se responde por el paciente asignado."""
+    paciente = _paciente_asignado(dispositivo, db)
+    if paciente is None:
+        db.commit()
+        raise ErrorDispositivo(404, "sin_paciente_asignado")
+    if usuario != sin_acentos(paciente.nombre_usuario):
+        db.commit()
+        raise ErrorDispositivo(404, "usuario_no_asignado")
+    return paciente
+
+
+@router.get("/frecuencia")
+def configuracion(usuario: str, db: Session = Depends(get_db)):
+    """
+    Lo que el equipo guarda para entrenar. Tres objetos independientes (el
+    equipo guarda y confirma cada uno por separado):
+      - "frecuencia": la vigente hoy (la última que fijó el médico).
+      - "resistencia_web": modo y nivel manual que fijó el médico.
+      - "predichos": FVC y PIM predichas, recalculadas en cada pedido.
+    "frecuencia" y "resistencia_web" se omiten si el médico todavía no las
+    fijó (sin "resistencia_web" el equipo usa el modo automático). En
+    "predichos", el valor que no se pueda calcular va en null.
+    """
+    dispositivo = obtener_dispositivo(db)
+    dispositivo.ultimo_contacto = ahora_utc()
+    paciente = _paciente_del_pedido(usuario, dispositivo, db)
+
+    respuesta: dict = {"ok": True}
+
+    frecuencia = (
+        db.query(FrecuenciaRecomendada)
+        .filter(
+            FrecuenciaRecomendada.id_paciente == paciente.id_paciente,
+            FrecuenciaRecomendada.vigente_desde <= hoy_argentina(),
+        )
+        .order_by(FrecuenciaRecomendada.vigente_desde.desc(), FrecuenciaRecomendada.id_frecuencia.desc())
+        .first()
+    )
+    if frecuencia is not None:
+        respuesta["frecuencia"] = {
+            "id": frecuencia.id_frecuencia,
+            "sesiones_por_semana": frecuencia.sesiones_por_semana,
+            "dias_semana": sorted(frecuencia.dias_semana),
+            "vigente_desde": frecuencia.vigente_desde.isoformat(),
+        }
+
+    resistencia = (
+        db.query(ConfiguracionResistencia)
+        .filter(ConfiguracionResistencia.id_paciente == paciente.id_paciente)
+        .order_by(ConfiguracionResistencia.id_resistencia.desc())
+        .first()
+    )
+    if resistencia is not None:
+        respuesta["resistencia_web"] = {
+            "id": resistencia.id_resistencia,
+            "modo": resistencia.modo,
+            "nivel_manual": resistencia.nivel_manual,
+            "enviado": resistencia.enviado.isoformat(),
+        }
+
+    respuesta["predichos"] = predichos(paciente, db)
+
+    registrar(
+        db, dispositivo, "CONFIGURACION",
+        f"frecuencia={frecuencia.id_frecuencia if frecuencia else None} "
+        f"resistencia={resistencia.id_resistencia if resistencia else None} {respuesta['predichos']}",
+    )
+    db.commit()
+    return respuesta
+
+
+@router.post("/frecuencia/confirmar")
+def confirmar_frecuencia(payload: ConfirmarFrecuenciaRequest, db: Session = Depends(get_db)):
+    """
+    El equipo guardó esa frecuencia. Siempre contesta 200 (el equipo no lee
+    la respuesta): si el id no existe, se anota y listo, así el equipo no se
+    queda reintentando. Repetirlo no cambia nada.
+    """
+    dispositivo = obtener_dispositivo(db)
+    dispositivo.ultimo_contacto = ahora_utc()
+
+    existe = db.get(FrecuenciaRecomendada, payload.id_frecuencia) is not None
+    if existe and db.get(FrecuenciaConfirmada, payload.id_frecuencia) is None:
+        db.add(FrecuenciaConfirmada(id_frecuencia=payload.id_frecuencia, confirmada_en=ahora_utc()))
+    registrar(db, dispositivo, "FRECUENCIA_OK", f"frecuencia {payload.id_frecuencia} existe={existe}")
+    db.commit()
+    return {"ok": True, "registrada": existe}
+
+
+@router.post("/resistencia/confirmar")
+def confirmar_resistencia(payload: ConfirmarResistenciaRequest, db: Session = Depends(get_db)):
+    """Igual que confirmar_frecuencia, para "resistencia_web"."""
+    dispositivo = obtener_dispositivo(db)
+    dispositivo.ultimo_contacto = ahora_utc()
+
+    resistencia = db.get(ConfiguracionResistencia, payload.id_resistencia)
+    if resistencia is not None and resistencia.confirmada_en is None:
+        resistencia.confirmada_en = ahora_utc()
+    registrar(
+        db, dispositivo, "RESISTENCIA_OK", f"resistencia {payload.id_resistencia} existe={resistencia is not None}",
+    )
+    db.commit()
+    return {"ok": True, "registrada": resistencia is not None}
+
+
+# --- Entrenamientos de la SD ------------------------------------------------------
+
+
+@router.post("/entrenamientos")
+def subir_entrenamiento(payload: SubirEntrenamientoRequest, db: Session = Depends(get_db)):
+    """
+    El JSON de una sesión de entrenamiento. Se guarda completo, tal como
+    llega. Si ya había llegado una sesión con ese `archivo`, se reemplaza.
+    La señal va aparte (POST /dispositivo/entrenamientos/csv), antes o después.
+    """
+    dispositivo = obtener_dispositivo(db)
+    dispositivo.ultimo_contacto = ahora_utc()
+    paciente = _paciente_del_pedido(payload.usuario, dispositivo, db)
+
+    resultado = guardar_entrenamiento(db, paciente, payload.archivo, payload.resumen)
+    registrar(
+        db, dispositivo, "ENTRENAMIENTO_RECIBIDO",
+        f"{payload.archivo} -> {resultado['estado']} id={resultado['id_entrenamiento']} "
+        f"senal={resultado['senal_recibida']}",
+    )
+    db.commit()
+    return {"ok": True, **resultado}
+
+
+@router.post("/entrenamientos/csv")
+async def subir_csv_entrenamiento(
+    request: Request, usuario: str, archivo: str, db: Session = Depends(get_db),
+):
+    """
+    La señal cruda de una sesión: el cuerpo es el CSV tal cual (text/csv,
+    `tiempo_ms,presion_cmh2o,flujo_lmin,v_flujo_v,v_pim_v`). Se guarda por
+    `archivo`: puede llegar antes que el JSON o repetida (se reemplaza).
+    400 si está vacío, no es texto, no tiene ninguna muestra o pesa demasiado.
+    """
+    if not (1 <= len(archivo) <= 80) or len(usuario) > 25:
+        raise ErrorDispositivo(400, "datos_invalidos")
+    cuerpo = await request.body()
+    if not cuerpo or len(cuerpo) > MAX_CSV_BYTES:
+        raise ErrorDispositivo(400, "datos_invalidos")
+    try:
+        csv = cuerpo.decode("utf-8")
+    except UnicodeDecodeError:
+        raise ErrorDispositivo(400, "datos_invalidos") from None
+    if leer_senal(csv) is None:
+        raise ErrorDispositivo(400, "datos_invalidos")
+
+    dispositivo = obtener_dispositivo(db)
+    dispositivo.ultimo_contacto = ahora_utc()
+    paciente = _paciente_del_pedido(usuario, dispositivo, db)
+
+    resultado = guardar_csv(db, paciente, archivo, csv)
+    registrar(
+        db, dispositivo, "ENTRENAMIENTO_CSV_RECIBIDO",
+        f"{archivo} -> {resultado['estado']} ({len(cuerpo)} bytes) "
+        f"entrenamiento={resultado['id_entrenamiento']}",
     )
     db.commit()
     return {"ok": True, **resultado}

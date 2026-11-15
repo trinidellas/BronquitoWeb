@@ -12,6 +12,7 @@ import { ResetearPage } from './pages/auth/ResetearPage'
 import { PatientDashboard } from './pages/paciente/PatientDashboard'
 import { DoctorView } from './pages/medico/DoctorView'
 import { EvaluationSignalPage } from './pages/medico/EvaluationSignalPage'
+import { TrainingSignalPage } from './pages/medico/entrenamiento/TrainingSignalPage'
 import { ConfiguracionPage } from './pages/configuracion/ConfiguracionPage'
 
 /** Rutas públicas: si ya hay sesión, redirige al dashboard. */
@@ -124,6 +125,20 @@ export default function App() {
             <div className="signal-page-bg">
               <main>
                 <EvaluationSignalPage />
+              </main>
+            </div>
+          </SoloAutenticados>
+        }
+      />
+
+      {/* Visor de una sesión de entrenamiento: igual que el de evaluaciones. */}
+      <Route
+        path="/medico/pacientes/:idPaciente/entrenamientos/:idEntrenamiento"
+        element={
+          <SoloAutenticados>
+            <div className="signal-page-bg">
+              <main>
+                <TrainingSignalPage />
               </main>
             </div>
           </SoloAutenticados>

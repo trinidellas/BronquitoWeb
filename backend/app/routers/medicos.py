@@ -4,11 +4,11 @@ from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session
 
 from app.core.database import get_db
+from app.core import entrenamientos_dispositivo
 from app.core.deps import get_current_medico
 from app.core.security import hashear_secreto, verificar_secreto
 from app.core.timezone import hoy_argentina
 from app.models.anotacion import Anotacion
-from app.models.entrenamiento import Entrenamiento
 from app.models.evaluacion import Evaluacion, EvaluacionMuestra
 from app.models.frecuencia_recomendada import FrecuenciaRecomendada
 from app.models.medico import Medico
@@ -167,12 +167,7 @@ def entrenamientos_de_paciente(
 ):
     """Entrenamientos de un paciente vinculado a ESTE médico, más recientes primero."""
     _exigir_vinculo(medico, id_paciente, db)
-    return (
-        db.query(Entrenamiento)
-        .filter(Entrenamiento.id_paciente == id_paciente)
-        .order_by(Entrenamiento.fecha_hora.desc())
-        .all()
-    )
+    return entrenamientos_dispositivo.listar(db, id_paciente)
 
 
 @router.get("/me/pacientes/{id_paciente}/rutina", response_model=RutinaOut | None)

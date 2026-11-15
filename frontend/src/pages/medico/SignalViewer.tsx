@@ -5,6 +5,7 @@ import { useSession } from '../../auth/session'
 import { describirPuntoXY, marcadoresDe } from '../../anotaciones/notas'
 import { claveGraficoSenal, comentariosDeSesion, useAnotaciones } from '../../anotaciones/useAnotaciones'
 import { SignalXYChart } from '../../components/ui/SignalXYChart'
+import { CursorContext, useCursorNuevo } from '../../components/ui/cursorSincronizado'
 import { TIPO_CSV, TIPO_PDF, elegirDestino } from '../../exportar/archivos'
 import { formatearFecha } from '../../data/mockData'
 import { GRAFICOS_POR_TIPO, csvDeSenales, fechaParaArchivo } from './graficosSenales'
@@ -51,6 +52,9 @@ export function SignalViewer({
 
   const sesion = evaluacion.fecha_hora
   const graficos = GRAFICOS_POR_TIPO[evaluacion.tipo]
+  // En PIM, presión y flujo van uno arriba del otro (mismo eje de tiempo).
+  const apilados = evaluacion.tipo === 'PIM_PEM'
+  const cursor = useCursorNuevo()
 
   useEffect(() => {
     if (!token) return
@@ -230,9 +234,10 @@ export function SignalViewer({
         <p className="empty-state">{error}</p>
       ) : !muestras ? null : (
         <div className="signal-layout">
+          <CursorContext.Provider value={cursor}>
           <div
             ref={gridRef}
-            className={`grid cols-2 signal-grid ${graficos.length <= 2 ? 'signal-grid-rows-1' : ''}`}
+            className={`grid ${apilados ? 'signal-grid-apilado' : 'cols-2'} signal-grid`}
             style={{ height: altoGrilla }}
           >
             {graficos.map((def) => {
@@ -246,6 +251,9 @@ export function SignalViewer({
                   etiquetaY={def.etiquetaY}
                   caption={def.titulo}
                   color={def.color}
+                  tiempos={muestras.tiempo}
+                  ancho={apilados ? 760 : undefined}
+                  alto={apilados ? 300 : undefined}
                   anotaciones={notasPaciente.paraGrafico(clave, {
                     sesion,
                     enfocar: enfoque?.grafico === clave ? enfoque : null,
@@ -254,6 +262,7 @@ export function SignalViewer({
               )
             })}
           </div>
+          </CursorContext.Provider>
 
           <NotasSesionPanel
             style={{ maxHeight: altoGrilla }}

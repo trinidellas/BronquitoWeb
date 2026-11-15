@@ -1,10 +1,11 @@
-import { useEffect, useMemo, useRef, useState } from 'react'
+import { useContext, useEffect, useId, useMemo, useRef, useState } from 'react'
 import type { MouseEvent as ReactMouseEvent, PointerEvent as ReactPointerEvent, ReactNode } from 'react'
 import { createPortal } from 'react-dom'
 import type { Anotacion } from '../../api/types'
 import type { DescripcionPunto } from '../../anotaciones/notas'
 import { marcadoresDe } from '../../anotaciones/notas'
 import { NotaComposer, NotaItem } from './Notas'
+import { CursorContext, indiceMasCercano } from './cursorSincronizado'
 
 /** Lo que necesita un gráfico para mostrar notas en sus puntos y dejar agregar nuevas. */
 export interface AnotacionesGrafico {
@@ -38,6 +39,13 @@ interface ChartInteractivoProps {
   anotaciones?: AnotacionesGrafico
   /** Ejes, líneas, etc.: contenido SVG en coordenadas del viewBox. */
   children: ReactNode
+  /**
+   * Tiempo de cada punto (crecientes). Con un CursorContext arriba, el cursor
+   * se comparte con los otros gráficos del visor (ver cursorSincronizado.ts).
+   */
+  tiempos?: number[]
+  /** Click en un punto (además de las notas, si hay). */
+  onClickPunto?: (indice: number) => void
 }
 
 /** Distancia (en px de pantalla) a la que el puntero agarra un punto, en gráficos que no son series de tiempo. */
@@ -65,7 +73,11 @@ export function ChartInteractivo({
   color,
   anotaciones,
   children,
+  tiempos,
+  onClickPunto,
 }: ChartInteractivoProps) {
+  const cursor = useContext(CursorContext)
+  const idGrafico = useId()
   const svgRef = useRef<SVGSVGElement>(null)
   const burbujaRef = useRef<HTMLDivElement>(null)
   const [hover, setHover] = useState<number | null>(null)
@@ -172,16 +184,33 @@ export function ChartInteractivo({
     })
   }
 
+  /** Avisa a los otros gráficos del visor dónde está el cursor. */
+  function compartir(indice: number | null) {
+    if (!cursor || !tiempos) return
+    cursor.mover(indice != null && tiempos[indice] != null ? tiempos[indice] : null, idGrafico)
+  }
+
   function alMover(e: ReactPointerEvent<SVGSVGElement>) {
     const c = aViewBox(e.clientX, e.clientY)
     if (!c) return
-    setHover(marcadorEn(c.x, c.y, c.escala)?.indice ?? puntoMasCercano(c.x, c.y, c.escala))
+    const indice = marcadorEn(c.x, c.y, c.escala)?.indice ?? puntoMasCercano(c.x, c.y, c.escala)
+    setHover(indice)
+    compartir(indice)
+  }
+
+  function alSalir() {
+    setHover(null)
+    compartir(null)
   }
 
   function alClickear(e: ReactMouseEvent<SVGSVGElement>) {
-    if (!anotaciones) return
     const c = aViewBox(e.clientX, e.clientY)
     if (!c) return
+    if (onClickPunto) {
+      const indice = puntoMasCercano(c.x, c.y, c.escala)
+      if (indice != null) onClickPunto(indice)
+    }
+    if (!anotaciones) return
     const marcador = marcadorEn(c.x, c.y, c.escala)
     if (marcador) {
       setAbierto(marcador.punto)
@@ -190,6 +219,13 @@ export function ChartInteractivo({
     const indice = puntoMasCercano(c.x, c.y, c.escala)
     setAbierto(indice == null ? null : clavesPuntos[indice])
   }
+
+  // El cursor que puso OTRO gráfico del visor: acá se ve sólo la línea y el punto.
+  const externo =
+    hover == null && cursor && cursor.t != null && cursor.origen !== idGrafico && tiempos
+      ? indiceMasCercano(tiempos, cursor.t)
+      : null
+  const enCursor = hover ?? externo
 
   const indiceAbierto = abierto != null ? indicePorClave.get(abierto) ?? null : null
   const marcadorAbierto = marcadores.find((m) => m.punto === abierto)
@@ -208,27 +244,44 @@ export function ChartInteractivo({
         width="100%"
         role={anotaciones ? 'group' : 'img'}
         aria-label={ariaLabel}
-        style={{ cursor: anotaciones && hover != null ? 'pointer' : undefined }}
+        style={{ cursor: (anotaciones || onClickPunto) && hover != null ? 'pointer' : undefined }}
         onPointerMove={alMover}
-        onPointerLeave={() => setHover(null)}
+        onPointerLeave={alSalir}
         onClick={alClickear}
       >
         {children}
 
-        {hover != null && posiciones[hover] && (
+        {enCursor != null && posiciones[enCursor] && (
           <g pointerEvents="none">
-            {xCreciente && (
+            <line
+              x1={posiciones[enCursor].x}
+              y1={area.y}
+              x2={posiciones[enCursor].x}
+              y2={area.y + area.alto}
+              stroke="#8FB3BA"
+              strokeWidth={1}
+              strokeDasharray="3 3"
+            />
+            {/* En curvas que no son series de tiempo (flujo-volumen), también la horizontal. */}
+            {!xCreciente && (
               <line
-                x1={posiciones[hover].x}
-                y1={area.y}
-                x2={posiciones[hover].x}
-                y2={area.y + area.alto}
+                x1={area.x}
+                y1={posiciones[enCursor].y}
+                x2={area.x + area.ancho}
+                y2={posiciones[enCursor].y}
                 stroke="#8FB3BA"
                 strokeWidth={1}
                 strokeDasharray="3 3"
               />
             )}
-            <circle cx={posiciones[hover].x} cy={posiciones[hover].y} r={4.5} fill="#fff" stroke={color} strokeWidth={2} />
+            <circle
+              cx={posiciones[enCursor].x}
+              cy={posiciones[enCursor].y}
+              r={4.5}
+              fill="#fff"
+              stroke={color}
+              strokeWidth={2}
+            />
           </g>
         )}
 

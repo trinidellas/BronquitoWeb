@@ -5,14 +5,45 @@ import { ChartInteractivo } from './ChartInteractivo'
 interface SignalXYChartProps {
   /** Valores del eje X, mismo orden y largo que `y`. */
   x: number[]
-  /** Valores del eje Y. */
-  y: number[]
+  /** Valores del eje Y. Un null es un hueco: la línea se corta ahí (no se toma como 0). */
+  y: (number | null)[]
   etiquetaX: string
   etiquetaY: string
   caption?: string
   color?: string
   /** Si está, se pueden marcar muestras con notas (la clave de cada punto es su índice). */
   anotaciones?: AnotacionesGrafico
+  /** Franjas verticales sombreadas (ej. la inspiración y la espiración de cada ciclo), en unidades de X. */
+  franjas?: FranjaXY[]
+  /** Puntos destacados (ej. la PIM y la PEM de cada ciclo), en unidades de X e Y. */
+  marcas?: MarcaXY[]
+  /** Tiempo de cada punto, para compartir el cursor con los otros gráficos (ver cursorSincronizado.ts). */
+  tiempos?: number[]
+  /** Click en el gráfico: el índice del punto más cercano. */
+  onClickPunto?: (indice: number) => void
+  /** Tamaño del viewBox: más ancho que alto para gráficos apilados a lo ancho. */
+  ancho?: number
+  alto?: number
+  /** Límites del eje X (por defecto, los de los datos). Sirve para acercarse a un tramo. */
+  rangoX?: [number, number]
+}
+
+export interface FranjaXY {
+  desde: number
+  hasta: number
+  color: string
+}
+
+export interface MarcaXY {
+  x: number
+  y: number
+  color: string
+  /** Texto al pasar el mouse. */
+  titulo?: string
+  /** Texto fijo al lado del punto (ej. el valor de la PIM). */
+  etiqueta?: string
+  /** Más grande y con borde: el punto del ciclo elegido. */
+  destacada?: boolean
 }
 
 /** Gráfico XY genérico para una señal cruda (flujo/volumen/presión vs. tiempo, o flujo-volumen). */
@@ -24,9 +55,16 @@ export function SignalXYChart({
   caption,
   color = '#2FA7A0',
   anotaciones,
+  franjas = [],
+  marcas = [],
+  tiempos,
+  onClickPunto,
+  ancho = 360,
+  alto = 240,
+  rangoX,
 }: SignalXYChartProps) {
-  const w = 360
-  const h = 240
+  const w = ancho
+  const h = alto
   const padLeft = 50
   const padRight = 16
   const padTop = 18
@@ -35,18 +73,38 @@ export function SignalXYChart({
   const plotW = w - padLeft - padRight
   const plotH = h - padTop - padBottom
 
-  const xMin = Math.min(...x)
-  const xMax = Math.max(...x)
-  const yMin = Math.min(...y)
-  const yMax = Math.max(...y)
+  // Sólo las muestras con valor se dibujan y se pueden señalar; cada una
+  // conserva su índice original (para las notas y el click).
+  const validos: number[] = []
+  y.forEach((v, i) => {
+    if (v != null && Number.isFinite(v)) validos.push(i)
+  })
+  const yValidos = validos.map((i) => y[i] as number)
+
+  const xMin = rangoX ? rangoX[0] : Math.min(...x)
+  const xMax = rangoX ? rangoX[1] : Math.max(...x)
+  // El eje Y incluye las marcas visibles (ej. la PIM del JSON puede pasar apenas el pico de la señal).
+  const yDeMarcas = marcas.filter((m) => m.x >= xMin && m.x <= xMax).map((m) => m.y)
+  const yMin = Math.min(...yValidos, ...yDeMarcas)
+  const yMax = Math.max(...yValidos, ...yDeMarcas)
   const xRango = xMax - xMin || 1
   const yRango = yMax - yMin || 1
 
-  const puntos = x.map((xv, i) => ({
-    x: padLeft + ((xv - xMin) / xRango) * plotW,
-    y: padTop + plotH - ((y[i] - yMin) / yRango) * plotH,
+  const puntos = validos.map((i) => ({
+    x: padLeft + ((x[i] - xMin) / xRango) * plotW,
+    y: padTop + plotH - (((y[i] as number) - yMin) / yRango) * plotH,
   }))
-  const puntosStr = puntos.map((p) => `${p.x.toFixed(1)},${p.y.toFixed(1)}`).join(' ')
+  // Un tramo de línea por cada racha de muestras seguidas con valor.
+  const tramos: string[] = []
+  let actual: string[] = []
+  validos.forEach((original, k) => {
+    if (k > 0 && original !== validos[k - 1] + 1 && actual.length > 0) {
+      tramos.push(actual.join(' '))
+      actual = []
+    }
+    actual.push(`${puntos[k].x.toFixed(1)},${puntos[k].y.toFixed(1)}`)
+  })
+  if (actual.length > 0) tramos.push(actual.join(' '))
 
   const marcasY = yMin === yMax ? [yMin] : [yMin, (yMin + yMax) / 2, yMax]
   const marcasX = xMin === xMax ? [xMin] : [xMin, (xMin + xMax) / 2, xMax]
@@ -65,9 +123,12 @@ export function SignalXYChart({
       }
       area={{ x: padLeft, y: padTop, ancho: plotW, alto: plotH }}
       posiciones={puntos}
-      describirPunto={(i) => describirPuntoXY(etiquetaX, etiquetaY, x[i], y[i])}
+      claves={validos.map(String)}
+      describirPunto={(k) => describirPuntoXY(etiquetaX, etiquetaY, x[validos[k]], y[validos[k]] as number)}
       color={color}
       anotaciones={anotaciones}
+      tiempos={tiempos ? validos.map((i) => tiempos[i]) : undefined}
+      onClickPunto={onClickPunto ? (k) => onClickPunto(validos[k]) : undefined}
     >
       <text x={padLeft} y={12} fontSize="9.5" fill="#5C7C82" fontFamily="Nunito, sans-serif">
         {etiquetaY}
@@ -84,6 +145,16 @@ export function SignalXYChart({
       {marcasX.map((v) => {
         const xx = padLeft + ((v - xMin) / xRango) * plotW
         return <line key={`gx-${v}`} x1={xx} y1={padTop} x2={xx} y2={padTop + plotH} stroke="#E7EDEF" strokeWidth={1} />
+      })}
+
+      {/* franjas sombreadas, recortadas al área del gráfico */}
+      {franjas.map((f, i) => {
+        const desde = Math.max(f.desde, xMin)
+        const hasta = Math.min(f.hasta, xMax)
+        if (!(hasta > desde)) return null
+        const x1 = padLeft + ((desde - xMin) / xRango) * plotW
+        const x2 = padLeft + ((hasta - xMin) / xRango) * plotW
+        return <rect key={`f-${i}`} x={x1} y={padTop} width={x2 - x1} height={plotH} fill={f.color} />
       })}
 
       {/* eje Y */}
@@ -122,7 +193,41 @@ export function SignalXYChart({
         )
       })}
 
-      <polyline points={puntosStr} fill="none" stroke={color} strokeWidth={2} strokeLinecap="round" strokeLinejoin="round" />
+      {tramos.map((tramo, i) => (
+        <polyline key={i} points={tramo} fill="none" stroke={color} strokeWidth={2} strokeLinecap="round" strokeLinejoin="round" />
+      ))}
+
+      {marcas.map((m, i) => {
+        if (m.x < xMin || m.x > xMax || m.y < yMin || m.y > yMax) return null
+        const cx = padLeft + ((m.x - xMin) / xRango) * plotW
+        const cy = padTop + plotH - ((m.y - yMin) / yRango) * plotH
+        return (
+          <g key={`m-${i}`} pointerEvents="none">
+            <circle
+              cx={cx}
+              cy={cy}
+              r={m.destacada ? 5 : 3.2}
+              fill={m.color}
+              stroke={m.destacada ? '#0C3A44' : '#fff'}
+              strokeWidth={m.destacada ? 1.5 : 1}
+            >
+              {m.titulo && <title>{m.titulo}</title>}
+            </circle>
+            {m.etiqueta && (
+              <text
+                x={cx + 6}
+                y={cy < padTop + 12 ? cy + 12 : cy - 6}
+                fontSize="9"
+                fontWeight="800"
+                fill={m.color}
+                fontFamily="Nunito, sans-serif"
+              >
+                {m.etiqueta}
+              </text>
+            )}
+          </g>
+        )
+      })}
     </ChartInteractivo>
   )
 }
