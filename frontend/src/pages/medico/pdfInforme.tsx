@@ -15,6 +15,7 @@ import {
   soloMarcadores,
   valorOGuion,
 } from '../../exportar/pdf'
+import { conFecha } from './entrenamiento/formato'
 import { VARIABLES_ENTRENAMIENTO, agruparEnSesiones, seriesDeEntrenamientos, seriesDeEvaluaciones } from './evolucion'
 
 export interface DatosInforme {
@@ -121,7 +122,8 @@ export async function generarInformeGeneral({
   }
 
   pdf.seccion('Entrenamientos')
-  const entrenamientosCronologicos = porFecha(entrenamientos)
+  // Las sesiones sin fecha no se pueden ubicar en el tiempo: no van al informe.
+  const entrenamientosCronologicos = porFecha(entrenamientos.filter(conFecha))
   if (entrenamientosCronologicos.length === 0) {
     pdf.vacio('Todavía no hay sesiones de entrenamiento registradas.')
   } else {

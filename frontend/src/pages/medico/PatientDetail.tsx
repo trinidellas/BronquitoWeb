@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from 'react'
-import { useNavigate } from 'react-router-dom'
+import { useNavigate, useSearchParams } from 'react-router-dom'
 import type { Paciente } from '../../types'
 import type { Entrenamiento, Evaluacion, Frecuencia, Rutina } from '../../api/types'
 import { ApiError, api } from '../../api/client'
@@ -10,6 +10,8 @@ import { MonthCalendar } from '../../components/ui/MonthCalendar'
 import { Modal } from '../../components/ui/Modal'
 import { TrashIcon } from '../../components/ui/TrashIcon'
 import { FrequencyModal } from './FrequencyModal'
+import { ResistenciaTag } from './ResistenciaEquipo'
+import * as fmtEntrenamiento from './entrenamiento/formato'
 import { formatearFecha, isoArgentina } from '../../data/mockData'
 import { TIPO_CSV, TIPO_PDF, elegirDestino } from '../../exportar/archivos'
 import {
@@ -30,7 +32,24 @@ interface PatientDetailProps {
 export function PatientDetail({ paciente, onDesvincular }: PatientDetailProps) {
   const { token, perfil } = useSession()
   const navigate = useNavigate()
-  const [tab, setTab] = useState<Tab>('evaluaciones')
+  // La pestaña vive también en la URL (?pestana=entrenamiento), para volver a
+  // la misma después de inspeccionar una señal.
+  const [searchParams, setSearchParams] = useSearchParams()
+  const [tab, setTabEstado] = useState<Tab>(() => {
+    const pestana = searchParams.get('pestana')
+    return pestana === 'entrenamiento' || pestana === 'calendario' ? pestana : 'evaluaciones'
+  })
+  function setTab(nueva: Tab) {
+    setTabEstado(nueva)
+    setSearchParams(
+      (actuales) => {
+        const nuevos = new URLSearchParams(actuales)
+        nuevos.set('pestana', nueva)
+        return nuevos
+      },
+      { replace: true },
+    )
+  }
   const [historialFrecuencia, setHistorialFrecuencia] = useState<Frecuencia[]>([])
   const [modalFrecuencia, setModalFrecuencia] = useState(false)
   const [confirmarDesvinculo, setConfirmarDesvinculo] = useState(false)
@@ -138,7 +157,6 @@ export function PatientDetail({ paciente, onDesvincular }: PatientDetailProps) {
   const sesiones = useMemo(() => agruparEnSesiones(evaluaciones), [evaluaciones])
 
   const ultimaEvaluacion = evaluaciones[0]
-  const ultimoEntrenamiento = entrenamientos[0]
   const hoy = new Date()
   const hoyIso = isoArgentina(hoy)
 
@@ -156,7 +174,7 @@ export function PatientDetail({ paciente, onDesvincular }: PatientDetailProps) {
   const frecuenciaVigente = historialFrecuencia[0]
 
   const diasConEntrenamiento = useMemo(
-    () => new Set(entrenamientos.map((e) => e.fecha_hora.slice(0, 10))),
+    () => new Set(entrenamientos.flatMap((e) => (e.fecha_hora ? [e.fecha_hora.slice(0, 10)] : []))),
     [entrenamientos],
   )
 
@@ -175,7 +193,8 @@ export function PatientDetail({ paciente, onDesvincular }: PatientDetailProps) {
   }, [evaluaciones])
 
   const evaluacionesCronologicas = [...evaluaciones].reverse()
-  const entrenamientosCronologicos = [...entrenamientos].reverse()
+  // Las sesiones sin fecha no se pueden ubicar en la evolución (sí aparecen en la tabla).
+  const entrenamientosCronologicos = entrenamientos.filter(fmtEntrenamiento.conFecha).reverse()
   const seriesEvaluaciones = seriesDeEvaluaciones(evaluacionesCronologicas)
   const seriesEntrenamiento = seriesDeEntrenamientos(entrenamientosCronologicos)
 
@@ -263,6 +282,9 @@ export function PatientDetail({ paciente, onDesvincular }: PatientDetailProps) {
             <span className="tag">
               Resistencia actual: {rutina ? `Nivel ${rutina.resistencia_activa}` : 'sin definir'}
             </span>
+            {token && (
+              <ResistenciaTag token={token} idPaciente={Number(paciente.id)} nombrePaciente={paciente.nombre} />
+            )}
             <button
               className="tag tag-clickable"
               onClick={() => setModalFrecuencia(true)}
@@ -403,7 +425,7 @@ export function PatientDetail({ paciente, onDesvincular }: PatientDetailProps) {
             <p className="empty-state">{errorEntrenamientos}</p>
           ) : (
             <>
-              {ultimoEntrenamiento ? (
+              {entrenamientosCronologicos.length > 0 ? (
                 <TrendChartCarousel
                   series={seriesEntrenamiento}
                   anotacionesDe={(serie) => (serie.clave ? notasPaciente.paraGrafico(serie.clave) : undefined)}
@@ -418,32 +440,35 @@ export function PatientDetail({ paciente, onDesvincular }: PatientDetailProps) {
                     <thead>
                       <tr>
                         <th>Fecha</th>
-                        <th>Resistencia prog.</th>
-                        <th>Reps. prog.</th>
-                        <th>Presión máx. (cmH₂O)</th>
-                        <th>Presión prom. (cmH₂O)</th>
-                        <th>Índice fatiga (%)</th>
-                        <th>Potencia (W)</th>
-                        <th>Trabajo (J)</th>
-                        <th>Duty cycle (%)</th>
-                        <th>Tiempo entre reps (s)</th>
-                        <th>Volumen total (L)</th>
+                        <th>Estado</th>
+                        <th>Ciclos</th>
+                        <th>Duración</th>
+                        <th>Resistencia</th>
+                        <th>Modo</th>
+                        <th>Sesión</th>
                       </tr>
                     </thead>
                     <tbody>
                       {entrenamientos.map((e) => (
                         <tr key={e.id_entrenamiento}>
-                          <td>{formatearFecha(e.fecha_hora)}</td>
-                          <td>{e.resistencia_programada}</td>
-                          <td>{e.repeticiones_programadas}</td>
-                          <td>{e.presion_max}</td>
-                          <td>{e.presion_promedio}</td>
-                          <td>{e.indice_fatiga}</td>
-                          <td>{e.potencia_insp}</td>
-                          <td>{e.trabajo}</td>
-                          <td>{e.duty_cycle}</td>
-                          <td>{e.tiempo_entre_reps}</td>
-                          <td>{e.volumen_total}</td>
+                          <td>{fmtEntrenamiento.fecha(e, false)}</td>
+                          <td>
+                            <span className={`entrenamiento-estado estado-${e.estado ?? 'desconocido'}`}>
+                              {fmtEntrenamiento.estado(e)}
+                            </span>
+                          </td>
+                          <td>{fmtEntrenamiento.ciclosHechos(e)}</td>
+                          <td>{fmtEntrenamiento.duracion(e.duracion_s)}</td>
+                          <td>{e.nivel_resistencia ?? fmtEntrenamiento.SIN_DATO}</td>
+                          <td>{fmtEntrenamiento.modo(e)}</td>
+                          <td>
+                            <button
+                              className="btn btn-outline btn-sm"
+                              onClick={() => navigate(`/medico/pacientes/${paciente.id}/entrenamientos/${e.id_entrenamiento}`)}
+                            >
+                              Inspeccionar
+                            </button>
+                          </td>
                         </tr>
                       ))}
                     </tbody>

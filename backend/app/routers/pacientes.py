@@ -4,9 +4,9 @@ from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session
 
 from app.core.database import get_db
+from app.core import entrenamientos_dispositivo
 from app.core.deps import get_current_paciente
 from app.core.security import hashear_secreto
-from app.models.entrenamiento import Entrenamiento
 from app.models.evaluacion import Evaluacion
 from app.models.medico import Medico
 from app.models.medico_paciente import MedicoPaciente
@@ -109,12 +109,7 @@ def mis_entrenamientos(
     db: Session = Depends(get_db),
 ):
     """Entrenamientos del propio paciente logueado, más recientes primero."""
-    return (
-        db.query(Entrenamiento)
-        .filter(Entrenamiento.id_paciente == paciente.id_paciente)
-        .order_by(Entrenamiento.fecha_hora.desc())
-        .all()
-    )
+    return entrenamientos_dispositivo.listar(db, paciente.id_paciente)
 
 
 @router.get("/me/medicos", response_model=list[MedicoACargoOut])

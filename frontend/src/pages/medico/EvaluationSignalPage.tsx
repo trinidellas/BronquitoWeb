@@ -108,7 +108,7 @@ export function EvaluationSignalPage() {
       idPaciente={Number(idPaciente)}
       evaluacion={evaluacion}
       evaluacionesDeLaSesion={evaluacionesDeLaSesion}
-      onVolver={() => navigate('/')}
+      onVolver={() => navigate(`/?paciente=${idPaciente}&pestana=evaluaciones`)}
       onCambiarTipo={cambiarTipo}
       avisoTipo={avisoTipo}
       onAnterior={anterior ? () => irA(anterior) : undefined}

@@ -2208,3 +2208,276 @@ button.cal-ribbon {
     align-items: flex-start;
   }
 }
+
+/* --- Resistencia de la válvula (pages/medico/ResistenciaEquipo.tsx) --- */
+.resistencia-ayuda {
+  margin-top: 6px;
+  font-size: 13px;
+  color: var(--ink-soft, #5b6b73);
+}
+
+.resistencia-pendiente {
+  display: inline-block;
+  width: 8px;
+  height: 8px;
+  margin-left: 6px;
+  border-radius: 50%;
+  background: #f2c94c;
+  vertical-align: middle;
+}
+
+/* --- Visor de entrenamientos (pages/medico/entrenamiento/TrainingViewer.tsx) --- */
+.ent-encabezado {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px 28px;
+  margin-bottom: 14px;
+}
+
+.ent-encabezado > div {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.ent-etiqueta {
+  font-size: 12px;
+  color: #5c7c82;
+}
+
+.ent-grupos {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+  gap: 14px;
+  margin: 14px 0;
+}
+
+.ent-grupo h4 {
+  margin: 0 0 8px;
+  font-family: 'Baloo 2';
+  font-size: 17px;
+  color: var(--teal-deep);
+}
+
+.ent-metricas {
+  margin: 0;
+  display: grid;
+  gap: 6px;
+}
+
+.ent-metrica {
+  display: flex;
+  justify-content: space-between;
+  gap: 10px;
+  border-bottom: 1px solid var(--line);
+  padding-bottom: 4px;
+}
+
+.ent-metrica dt {
+  font-size: 13px;
+  color: #5c7c82;
+}
+
+.ent-metrica dd {
+  margin: 0;
+  font-weight: 800;
+  text-align: right;
+  color: var(--ink);
+}
+
+.ent-metrica-detalle {
+  font-weight: 600;
+  font-size: 12px;
+  color: #5c7c82;
+}
+
+.ent-graficos {
+  margin-top: 14px;
+}
+
+.ent-graficos .chart-wrap {
+  background: #fff;
+  padding: 10px 12px 4px;
+}
+
+.ent-graficos .chart-wrap svg {
+  width: 100%;
+  display: block;
+}
+
+.ent-leyenda {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px 14px;
+  font-size: 12px;
+  color: #5c7c82;
+  margin-top: 8px;
+}
+
+.ent-muestra,
+.ent-punto {
+  display: inline-block;
+  width: 14px;
+  height: 10px;
+  margin-right: -8px;
+  border-radius: 2px;
+  vertical-align: middle;
+}
+
+.ent-punto {
+  width: 9px;
+  height: 9px;
+  border-radius: 50%;
+  border: none;
+}
+
+.ent-tabla-ciclos td,
+.ent-tabla-ciclos th {
+  white-space: nowrap;
+  text-align: right;
+}
+
+.entrenamiento-estado {
+  display: inline-block;
+  padding: 2px 8px;
+  border-radius: 999px;
+  font-size: 12px;
+  font-weight: 800;
+  background: var(--line);
+  color: var(--ink);
+}
+
+.entrenamiento-estado.estado-completa {
+  background: #d9f3e6;
+  color: #1f7a4d;
+}
+
+.entrenamiento-estado.estado-incompleta {
+  background: #fdf0d2;
+  color: var(--warn);
+}
+
+.entrenamiento-estado.estado-interrumpida {
+  background: var(--pink-soft);
+  color: var(--pink-deep);
+}
+
+/* PIM: presión y flujo uno arriba del otro, a lo ancho (pages/medico/SignalViewer.tsx). */
+.signal-grid.signal-grid-apilado {
+  grid-template-columns: 1fr;
+  grid-template-rows: repeat(2, 1fr);
+}
+
+/* Visor de entrenamientos: ciclos y señales apiladas. */
+.ent-selector {
+  margin: 14px 0;
+  padding: 12px 16px;
+}
+
+.ent-selector-fila {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.ent-chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+  flex: 1;
+}
+
+.ent-chip {
+  min-width: 30px;
+  padding: 3px 8px;
+  border-radius: 8px;
+  border: 1.5px solid var(--line);
+  background: #fff;
+  font-family: inherit;
+  font-weight: 800;
+  font-size: 12px;
+  color: var(--ink);
+  cursor: pointer;
+}
+
+.ent-chip:hover {
+  border-color: var(--teal);
+}
+
+.ent-chip.activo {
+  background: var(--teal);
+  border-color: var(--teal);
+  color: #fff;
+}
+
+.ent-acercar {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 13px;
+  white-space: nowrap;
+}
+
+.ent-ayuda {
+  margin: 8px 0 0;
+  font-size: 12px;
+  color: #5c7c82;
+}
+
+.ent-senales {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: 14px;
+  align-items: start;
+}
+
+.ent-senales.con-ciclo {
+  grid-template-columns: minmax(0, 1fr) 300px;
+}
+
+.ent-graficos-apilados {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  min-width: 0;
+}
+
+.ent-graficos-apilados .chart-wrap {
+  background: #fff;
+  border-radius: 16px;
+  padding: 10px 12px 4px;
+}
+
+.ent-graficos-apilados .chart-wrap svg {
+  width: 100%;
+  display: block;
+}
+
+.ent-ciclo-elegido {
+  position: sticky;
+  top: 12px;
+}
+
+.ent-fila-ciclo {
+  cursor: pointer;
+}
+
+.ent-fila-ciclo:hover td {
+  background: var(--teal-pale);
+}
+
+.ent-fila-ciclo.elegida td {
+  background: #c9eef5;
+  font-weight: 800;
+}
+
+@media (max-width: 900px) {
+  .ent-senales.con-ciclo {
+    grid-template-columns: 1fr;
+  }
+
+  .ent-selector-fila {
+    flex-wrap: wrap;
+  }
+}

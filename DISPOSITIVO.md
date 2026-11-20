@@ -13,6 +13,11 @@ Código del servidor:
 | `backend/app/models/dispositivo.py` | Tablas `dispositivo`, `solicitudes_dispositivo`, `archivos_dispositivo`, `registro_sync` |
 | `backend/app/core/dispositivo.py` | Clave del dispositivo, armado del perfil, IP de la red local |
 | `backend/app/core/evaluaciones_dispositivo.py` | Paso de las pruebas de la SD al formato de la web |
+| `backend/app/core/entrenamientos_dispositivo.py` | Recepción de entrenamientos (JSON + CSV) y salida para la web |
+| `backend/app/models/entrenamiento.py` | Tablas `entrenamientos`, `ciclos_entrenamiento`, `entrenamientos_csv` y `entrenamientos_json` |
+| `backend/app/core/predichos.py` | FVC predicha (GLI Global 2022) y PIM predicha (Evans y Whitelaw) |
+| `backend/app/models/configuracion_dispositivo.py` | Tablas `configuracion_resistencia`, `frecuencia_confirmada`, `ecuacion_predichos` |
+| `backend/app/routers/resistencia_medico.py` | Lo que fija el médico: modo y nivel de resistencia, ecuación para sexo "X" |
 
 ---
 
@@ -125,8 +130,8 @@ Siempre llega un objeto JSON. Primero mirar el **código HTTP**, después el cue
 | 401 | `clave_invalida` | todos | Revisar la clave del dispositivo |
 | 401 | `pin_incorrecto` | `verificar-pin` | Mostrar "PIN incorrecto" y volver a pedirlo (sin límite) |
 | 404 | `solicitud_inexistente` | `confirmar` | Descartar esa solicitud y seguir |
-| 404 | `sin_paciente_asignado` | `verificar-pin`, `evaluaciones` | El médico le sacó el paciente: volver a sincronizar |
-| 404 | `usuario_no_asignado` | `verificar-pin`, `evaluaciones` | El usuario no es el asignado: volver a sincronizar |
+| 404 | `sin_paciente_asignado` | `verificar-pin`, `evaluaciones`, `entrenamientos`, `frecuencia` | El médico le sacó el paciente: volver a sincronizar |
+| 404 | `usuario_no_asignado` | `verificar-pin`, `evaluaciones`, `entrenamientos`, `frecuencia` | El usuario no es el asignado: volver a sincronizar |
 | 503 | `dispositivo_no_configurado` | todos | Avisar: falta configurar el servidor |
 
 ### Ejemplo en C++ (HTTPClient + ArduinoJson v7)
@@ -506,6 +511,142 @@ Qué hace la web con cada prueba:
 - **Repetidas:** se reconocen por la huella del contenido (sin `"sincronizado"`), así que
   da igual si se corta la luz antes de marcarla.
 
+### 5.5 bis `POST /dispositivo/entrenamientos` y `/dispositivo/entrenamientos/csv`
+
+Una sesión de entrenamiento son **dos pedidos**, en cualquier orden:
+
+```
+POST /dispositivo/entrenamientos                                   (application/json)
+{"usuario": "msalerno", "archivo": "ent_20261114_153000", "resumen": { ...JSON de la sesión... }}
+
+POST /dispositivo/entrenamientos/csv?usuario=msalerno&archivo=ent_20261114_153000   (text/csv)
+<el CSV: tiempo_ms,presion_cmh2o,flujo_lmin,v_flujo_v,v_pim_v,flujo_proc_lmin>
+```
+
+**El CSV** se lee por nombre de columna (no por posición, sin importar mayúsculas):
+
+- `flujo_proc_lmin`: flujo **procesado** por el equipo (sentido por fase, venturi, BTPS y
+  filtro de picos), negativo al inspirar. Es el que grafica la web; en cada ciclo su pico
+  coincide con `-pif_Lmin` / `pef_Lmin` del JSON.
+- Sin esa columna (equipos viejos) o con la columna vacía en todas las filas (sesión sin
+  análisis), la web grafica `flujo_lmin` con el aviso "señal cruda, solo ilustrativa".
+- Una celda vacía suelta es un **hueco** (la línea se corta), no un 0.
+- También se acepta el formato más viejo, con el tiempo en segundos:
+  `tiempo_s,v_flujo_V,v_pim_V,flujo_Lmin,presion_cmH2O`.
+
+- Se guardan por `archivo`: si llega de nuevo, **se reemplaza** (no se duplica). El CSV
+  puede llegar antes que el JSON o repetido.
+- La sesión cuenta como recibida cuando llegaron los dos. Una sesión puede no tener CSV:
+  la web muestra "Señal no disponible".
+- El JSON se reparte en tablas planas (sin anidar) y además se guarda **completo, tal como
+  llega**, en `entrenamientos_json`; un campo nuevo no se pierde:
+
+  | Tabla | Qué tiene |
+  |---|---|
+  | `entrenamientos` | Una fila por sesión: datos de la sesión, ambiente, promedios (`pim_prom_cmh2o`, `pif_prom_lmin`, `ti_prom_s`…) y multiciclo (`frecuencia_rpm`, `trabajo_total_insp_j`, `caida_pim_pct`, `pim_max_cmh2o` + `pim_max_ciclo`…) |
+  | `ciclos_entrenamiento` | Una fila por ciclo, una columna por feature (`numero`, `t_inicio_s`, `ti_s`, `pif_lmin`, `pim_cmh2o`, `t_pim_s`…) |
+  | `entrenamientos_csv` | El CSV tal cual llegó |
+  | `entrenamientos_json` | El JSON original (respaldo) |
+
+  Se guarda con los signos del equipo (PIM positiva, PEM negativa), salvo
+  `caida_pim_pct`, que queda siempre con el criterio nuevo (> 0 = cayó).
+- El JSON sin `"id_entrenamiento"` se toma como de la versión anterior del equipo: la
+  web le invierte el signo a `caida_pim_pct` al mostrarlo.
+- `sincronizado` se ignora.
+
+| HTTP | Cuerpo | Qué hacer |
+|---|---|---|
+| 200 (JSON) | `{"ok": true, "estado": "nuevo", "id_entrenamiento": 32, "senal_recibida": true}` | Marcar el JSON como subido |
+| 200 (CSV) | `{"ok": true, "estado": "reemplazado", "id_entrenamiento": 32, "entrenamiento_recibido": true}` | Marcar el CSV como subido (`id_entrenamiento` null si el JSON todavía no llegó) |
+| 400 | `datos_invalidos` | Esa sesión queda pendiente; seguir con la siguiente |
+| 404 | `usuario_no_asignado` / `sin_paciente_asignado` | Dejar de subir y sincronizar de nuevo |
+
+400 en el CSV: cuerpo vacío, que no es UTF-8, sin ninguna fila de números, de más de
+8 MB, o sin `usuario`/`archivo`. En el JSON: `resumen` que no es un objeto, o `archivo`
+vacío / de más de 80 caracteres. Un número inválido **dentro** del JSON no da 400: se
+guarda igual y la web lo muestra como "--".
+
+### 5.6 Configuración: `GET /dispositivo/frecuencia` y sus confirmaciones
+
+Frecuencia, resistencia y valores predichos. El equipo la pide al entrar a Configuración
+y antes de cada entrenamiento, si tiene conexión.
+
+```
+GET /dispositivo/frecuencia?usuario=msalerno
+```
+
+**200**
+
+```json
+{
+  "ok": true,
+  "frecuencia": {
+    "id": 5,
+    "sesiones_por_semana": 3,
+    "dias_semana": [0, 2, 4],
+    "vigente_desde": "2026-11-14"
+  },
+  "resistencia_web": {
+    "id": 17,
+    "modo": "automatico",
+    "nivel_manual": 3,
+    "enviado": "2026-11-14"
+  },
+  "predichos": {
+    "fvc_predicha_L": 4.61,
+    "pim_predicha_cmh2o": 111.4
+  }
+}
+```
+
+Los tres objetos son independientes: el equipo guarda y confirma cada uno por separado.
+
+- **`frecuencia`**: la vigente hoy. `dias_semana` va de 0 = lunes a 6 = domingo y
+  `vigente_desde` es AAAA-MM-DD. **Se omite** si el médico todavía no fijó ninguna.
+- **`resistencia_web`**: lo que fijó el médico. **Se omite** si todavía no fijó nada; en
+  ese caso el equipo usa el modo automático.
+  - `id`: cambia cada vez que el médico la modifica.
+  - `modo`: `"automatico"` (el equipo usa el nivel que calcula él y exige una evaluación
+    de los últimos 15 días para entrenar) o `"manual"` (usa `nivel_manual` y no vence).
+  - `nivel_manual`: entero de 1 (más abierta) a 5 (más cerrada). Viene siempre, también
+    en automático: es el último que fijó el médico.
+  - `enviado`: AAAA-MM-DD en que el médico lo fijó.
+  - **El nivel automático no viaja nunca:** lo calcula el equipo después de cada
+    evaluación (S = 0,6·%PIM + 0,4·%FVC) y lo guarda sólo en su SD (`resistencia_auto`).
+- **`predichos`**: siempre viene, con los dos valores **como número** y en positivo. Se
+  recalculan en cada pedido, así se actualizan solos con la edad. El que no se pueda
+  calcular va en `null`; en ese caso el equipo no calcula el nivel automático, pero sigue
+  controlando la vigencia de la evaluación.
+  - `fvc_predicha_L`: GLI Global 2022 (la ecuación sin etnia), con sexo, edad y talla.
+    `null` fuera de 3–95 años.
+  - `pim_predicha_cmh2o`: Evans y Whitelaw (2009), con la edad en años enteros:
+    hombres 120 − 0,41·edad, mujeres 108 − 0,61·edad.
+  - Sexo "X": el médico elige en la web la ecuación de hombre o la de mujer, y se aplica a
+    las dos. Mientras no elija, los dos van en `null`.
+  - Ya **no** van en el perfil de CARGAR_PERFIL: así no hace falta reenviar el perfil (y
+    volver a pedir el PIN) cuando cambia la edad.
+
+| HTTP | Cuerpo | Qué hacer |
+|---|---|---|
+| 200 | lo de arriba | Guardar cada objeto que cambió (comparar `id`) y confirmarlo |
+| 400 | `datos_invalidos` | Falta `?usuario=` |
+| 404 | `usuario_no_asignado` / `sin_paciente_asignado` | Sincronizar de nuevo (identificar) |
+
+**Confirmaciones** (una por cada objeto que el equipo guardó):
+
+```
+POST /dispositivo/frecuencia/confirmar     {"id_frecuencia": 5}
+POST /dispositivo/resistencia/confirmar    {"id_resistencia": 17}
+```
+
+Siempre contestan **200** `{"ok": true, "registrada": true}`. Si el id no existe (por
+ejemplo, se borró la base del servidor) contestan igual 200 con `"registrada": false`, así
+el equipo no se queda reintentando. Repetirlas no cambia nada. Los predichos no se
+confirman.
+
+En la web, el médico ve un punto amarillo al lado de "Modo de resistencia" hasta que el
+equipo confirma la configuración actual.
+
 ---
 
 ## 6. Estados de una solicitud
@@ -612,6 +753,9 @@ curl -X POST $B/dispositivo/solicitudes/1/confirmar -H "X-Device-Key: $K" -H "$J
   -d '{"ok":false,"detalle":"archivos_pendientes"}'
 curl -X POST $B/dispositivo/verificar-pin -H "X-Device-Key: $K" -H "$J" \
   -d '{"usuario":"msalerno","pin":"1234"}'
+curl "$B/dispositivo/frecuencia?usuario=msalerno" -H "X-Device-Key: $K"
+curl -X POST $B/dispositivo/frecuencia/confirmar -H "X-Device-Key: $K" -H "$J" -d '{"id_frecuencia":3}'
+curl -X POST $B/dispositivo/resistencia/confirmar -H "X-Device-Key: $K" -H "$J" -d '{"id_resistencia":1}'
 
 # --- Lado médico (lo mismo que hace el panel de la web) ---
 curl $B/medicos/me/dispositivo -H "Authorization: Bearer $T"                 # ver estado
@@ -622,6 +766,9 @@ curl -X POST $B/medicos/me/dispositivo/formatear -H "Authorization: Bearer $T" -
 curl -X POST $B/medicos/me/dispositivo/formatear -H "Authorization: Bearer $T" -H "$J" \
   -d '{"nombre_usuario_reemplazo":"therrera"}'                                # cambiar usuario
 curl -X POST $B/medicos/me/dispositivo/solicitudes/1/cancelar -H "Authorization: Bearer $T"  # cancelar
+curl -X POST $B/medicos/me/pacientes/1/resistencia -H "Authorization: Bearer $T" -H "$J" \
+  -d '{"modo":"manual","nivel_manual":4}'                                    # fijar resistencia
+curl $B/medicos/me/pacientes/1/configuracion-equipo -H "Authorization: Bearer $T"  # ver resistencia y predichos
 ```
 
 ---
@@ -638,6 +785,12 @@ y los errores con el formato de siempre de FastAPI (`{"detail": "..."}`).
 | `POST /medicos/me/dispositivo/formatear` | médico | Crea RESET; con `nombre_usuario_reemplazo` es "cambiar usuario" |
 | `POST /medicos/me/dispositivo/solicitudes/{id}/cancelar` | médico | Cancela un pedido PENDIENTE o ENTREGADA |
 | `GET /pacientes/me/dispositivo` | paciente | Código para conectar, última conexión y si el dispositivo tiene su PIN actual |
+| `GET /medicos/me/pacientes/{id}/configuracion-equipo` | médico | Resistencia vigente, predichos y si el equipo ya la recibió |
+| `POST /medicos/me/pacientes/{id}/resistencia` | médico | Fija modo (`automatico`/`manual`) y `nivel_manual` (1–5); crea un id nuevo |
+| `GET /medicos/me/pacientes/{id}/entrenamientos` | médico | Lista de sesiones (más recientes primero, las sin fecha al final) |
+| `GET /medicos/me/pacientes/{id}/entrenamientos/{id_ent}` | médico | Una sesión con sus ciclos |
+| `GET /medicos/me/pacientes/{id}/entrenamientos/{id_ent}/senal` | médico | La señal del CSV (tiempo, presión, flujo); 404 si no hay |
+| `PUT /medicos/me/pacientes/{id}/ecuacion-predichos` | médico | Sólo sexo "X": `{"sexo_ecuacion": "M"}` o `"F"` |
 
 Reglas del lado médico:
 
@@ -651,6 +804,7 @@ Reglas del lado médico:
 
 ## 10. Pendiente (próxima etapa)
 
-- Solicitud `RUTINA`: rutina + frecuencia recomendada en `CONFIGURACION.JSON`, y el
-  punto amarillo de "frecuencia sin sincronizar" en la web.
-- Subida de entrenamientos desde la ESP (las evaluaciones ya se suben, ver 5.5).
+- Punto amarillo de "frecuencia sin sincronizar" en la web (el servidor ya guarda la
+  confirmación, ver 5.6).
+- El servidor standalone (`servidor_bronquito.py`) todavía no tiene los endpoints de
+  evaluaciones, entrenamientos ni configuración.

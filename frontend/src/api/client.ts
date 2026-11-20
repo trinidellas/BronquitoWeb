@@ -7,6 +7,7 @@ import type {
   Anotacion,
   AnotacionCrearBody,
   Entrenamiento,
+  EntrenamientoDetalle,
   Evaluacion,
   EvaluacionMuestras,
   Frecuencia,
@@ -22,6 +23,7 @@ import type {
   PacienteRegistroBody,
   RecuperacionOut,
   Rutina,
+  SenalEntrenamiento,
   TokenOut,
 } from './types'
 
@@ -123,6 +125,13 @@ export const api = {
       apiFetch<Evaluacion[]>(`/medicos/me/pacientes/${idPaciente}/evaluaciones`, { token }),
     entrenamientosDe: (token: string, idPaciente: number) =>
       apiFetch<Entrenamiento[]>(`/medicos/me/pacientes/${idPaciente}/entrenamientos`, { token }),
+    entrenamientoDe: (token: string, idPaciente: number, idEntrenamiento: number) =>
+      apiFetch<EntrenamientoDetalle>(`/medicos/me/pacientes/${idPaciente}/entrenamientos/${idEntrenamiento}`, { token }),
+    senalDeEntrenamiento: (token: string, idPaciente: number, idEntrenamiento: number) =>
+      apiFetch<SenalEntrenamiento>(
+        `/medicos/me/pacientes/${idPaciente}/entrenamientos/${idEntrenamiento}/senal`,
+        { token },
+      ),
     rutinaDe: (token: string, idPaciente: number) =>
       apiFetch<Rutina | null>(`/medicos/me/pacientes/${idPaciente}/rutina`, { token }),
     muestrasDeEvaluacion: (token: string, idPaciente: number, idEvaluacion: number) =>
