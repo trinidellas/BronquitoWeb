@@ -5,6 +5,7 @@ from fastapi.middleware.cors import CORSMiddleware
 
 from app.core.config import settings
 from app.core.database import Base, SessionLocal, engine, migrar_esquema_existente
+from app.core.evaluaciones_dispositivo import completar_inspiracion
 from app.core.migracion_entrenamientos import migrar_entrenamientos, reingresar
 from app.routers import (
     auth,
@@ -70,6 +71,13 @@ def on_startup() -> None:
                 )
         if migracion.borrada_original:
             sembrar_si_falta(db)
+        try:
+            completar_inspiracion(db)
+        except Exception:  # noqa: BLE001 - la API tiene que arrancar igual
+            db.rollback()
+            logging.getLogger(__name__).exception(
+                "No se pudo completar la inspiración de las curvas del equipo; se reintenta al próximo arranque."
+            )
     finally:
         db.close()
 

@@ -8,7 +8,8 @@ Lo que cambia entre la SD y la web:
   - El `.csv` es `tiempo_ms,presion_cmh2o,flujo_lmin`. La web guarda el
     tiempo en segundos y el flujo en L/s, y además necesita el volumen, que la
     ESP no guarda: se integra el flujo igual que lo hace el equipo al mostrar
-    el historial (`Evaluaciones::cargarSerie` del firmware).
+    el historial (`TarjetaSD::cargarSerie` del firmware), con la espiración y
+    la inspiración, así la curva flujo-volumen tiene las dos ramas.
   - La PIM y la espirometría de una calibración se guardan en momentos
     distintos, pero la web arma cada sesión con el `fecha_hora` exacto: las
     dos toman la hora de la calibración (`eval_AAAAMMDD_HHMMSS`).
@@ -124,25 +125,48 @@ def leer_csv(csv: str | None) -> list[tuple[float, float, float]]:
     return filas
 
 
+def _ventanas(resumen: dict) -> list[tuple[float, float]] | None:
+    """
+    Las ventanas (en ms) en las que se integra el flujo, como en
+    `TarjetaSD::cargarSerie` del firmware: la del soplido (`evento_inicio_ms` /
+    `evento_fin_ms`) y, si la hay, la de la inspiración que le sigue
+    (`insp_inicio_ms` / `insp_fin_ms`). None si el .json no trae la del soplido
+    (archivos viejos, PIM): se integra todo.
+    """
+    inicio = _numero(resumen.get("evento_inicio_ms"))
+    fin = _numero(resumen.get("evento_fin_ms"))
+    if inicio is None or fin is None or inicio < 0:
+        return None
+    ventanas = [(inicio, fin)]
+    insp_inicio = _numero(resumen.get("insp_inicio_ms"))
+    insp_fin = _numero(resumen.get("insp_fin_ms"))
+    if insp_inicio is not None and insp_fin is not None and insp_inicio >= 0:
+        ventanas.append((insp_inicio, insp_fin))
+    return ventanas
+
+
+def _en_ventanas(t_ms: float, ventanas: list[tuple[float, float]] | None) -> bool:
+    return ventanas is None or any(desde <= t_ms <= hasta for desde, hasta in ventanas)
+
+
 def curva(filas: list[tuple[float, float, float]], resumen: dict) -> dict[str, list[float]] | None:
     """
     La curva en las unidades de la web: tiempo (s), flujo (L/s), presión
-    (cmH₂O) y volumen (L). El volumen es la integral del flujo, sólo dentro de
-    la ventana del soplido si el .json la trae (`evento_inicio_ms` /
-    `evento_fin_ms`): antes vale 0 y después queda constante.
-    None si no hay curva (ej. una PIM sin intento informado).
+    (cmH₂O) y volumen (L). El volumen es la integral del flujo (ver
+    `_ventanas`): antes del soplido vale 0, sube hasta la FVC, baja durante la
+    inspiración (el flujo inspiratorio es negativo) y fuera de las ventanas
+    queda constante. Así la curva flujo-volumen tiene las dos ramas, como en el
+    equipo. None si no hay curva (ej. una PIM sin intento informado).
     """
     if len(filas) < 2:
         return None
-    inicio = _numero(resumen.get("evento_inicio_ms"))
-    fin = _numero(resumen.get("evento_fin_ms"))
-    con_ventana = inicio is not None and fin is not None and inicio >= 0
+    ventanas = _ventanas(resumen)
 
     tiempo, flujo, presion, volumen = [], [], [], []
     acumulado = 0.0
     t_anterior = None
     for t_ms, p, q in filas:
-        if t_anterior is not None and (not con_ventana or inicio <= t_ms <= fin):
+        if t_anterior is not None and _en_ventanas(t_ms, ventanas):
             acumulado += q * (t_ms - t_anterior) / 60000
         t_anterior = t_ms
         tiempo.append(round(t_ms / 1000, 3))
@@ -150,6 +174,59 @@ def curva(filas: list[tuple[float, float, float]], resumen: dict) -> dict[str, l
         presion.append(round(p, 2))
         volumen.append(round(acumulado, 4))
     return {"tiempo": tiempo, "flujo": flujo, "presion": presion, "volumen": volumen}
+
+
+def completar_inspiracion(db: Session) -> int:
+    """
+    Las pruebas que llegaron antes de que `curva` integrara la inspiración
+    tienen el volumen clavado en la FVC durante toda la inspiración, y en la
+    curva flujo-volumen esa rama queda como una línea vertical. Les recalcula
+    el volumen desde que empieza la inspiración con el flujo guardado (lo
+    anterior no cambia, así las notas siguen en el mismo punto). Sólo toca las
+    curvas con ese problema: corre en cada arranque y, una vez corregidas, no
+    hace nada. Devuelve cuántas corrigió.
+    """
+    corregidas = 0
+    archivos = db.query(ArchivoDispositivo).filter(ArchivoDispositivo.id_evaluacion.isnot(None)).all()
+    for archivo in archivos:
+        ventanas = _ventanas(archivo.resumen or {})
+        if ventanas is None or len(ventanas) < 2:
+            continue
+        muestra = (
+            db.query(EvaluacionMuestra)
+            .filter(EvaluacionMuestra.id_evaluacion == archivo.id_evaluacion)
+            .first()
+        )
+        if muestra is None or len(muestra.tiempo) < 2:
+            continue
+        tiempo, flujo, volumen = muestra.tiempo, muestra.flujo, muestra.volumen
+
+        soplido = ventanas[:1]
+        en_inspiracion = [
+            i for i, t in enumerate(tiempo)
+            if i > 0 and _en_ventanas(round(t * 1000), ventanas) and not _en_ventanas(round(t * 1000), soplido)
+        ]
+        if not en_inspiracion:
+            continue
+        desde = en_inspiracion[0]
+        volumen_previo = volumen[desde - 1]
+        sin_integrar = all(volumen[i] == volumen_previo for i in en_inspiracion)
+        hay_flujo = any(flujo[i] for i in en_inspiracion)
+        if not (sin_integrar and hay_flujo):
+            continue
+
+        nuevo = list(volumen[:desde])
+        acumulado = volumen_previo
+        for i in range(desde, len(tiempo)):
+            if _en_ventanas(round(tiempo[i] * 1000), ventanas):
+                acumulado += (flujo[i] or 0) * (tiempo[i] - tiempo[i - 1])
+            nuevo.append(round(acumulado, 4))
+        muestra.volumen = nuevo
+        corregidas += 1
+
+    if corregidas:
+        db.commit()
+    return corregidas
 
 
 def _fecha_en_id(*ids: str | None) -> datetime | None:

@@ -502,7 +502,8 @@ Qué hace la web con cada prueba:
 
 - **Unidades:** tiempo de ms a s, flujo de L/min a L/s, presión igual. El volumen se integra
   del flujo igual que en el historial del equipo (dentro de `evento_inicio_ms`–`evento_fin_ms`
-  si están).
+  y de `insp_inicio_ms`–`insp_fin_ms` si están): sube hasta la FVC y baja durante la
+  inspiración, así la curva flujo-volumen muestra las dos ramas.
 - **Fecha:** la del `calibracion_id` (`eval_AAAAMMDD_HHMMSS`), así la PIM y la
   espirometría de una calibración quedan en la misma sesión. Las `eval_SINHORA_n` van al
   01/11/2026 (`FECHA_SIN_HORA`) con una hora al azar, la misma para toda la calibración.
