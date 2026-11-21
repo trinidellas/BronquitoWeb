@@ -18,6 +18,7 @@ import type {
   MedicoPerfilUpdateBody,
   MedicoRegistroBody,
   PacienteLoginBody,
+  PacienteDeMedico,
   PacientePerfil,
   PacientePerfilUpdateBody,
   PacienteRegistroBody,
@@ -112,9 +113,9 @@ export const api = {
     me: (token: string) => apiFetch<MedicoPerfil>('/medicos/me', { token }),
     actualizarPerfil: (token: string, body: MedicoPerfilUpdateBody) =>
       apiFetch<MedicoPerfil>('/medicos/me', { method: 'PATCH', body, token }),
-    misPacientes: (token: string) => apiFetch<PacientePerfil[]>('/medicos/me/pacientes', { token }),
+    misPacientes: (token: string) => apiFetch<PacienteDeMedico[]>('/medicos/me/pacientes', { token }),
     vincularPaciente: (token: string, nombreUsuario: string, pin: string) =>
-      apiFetch<PacientePerfil>('/medicos/me/vincular', {
+      apiFetch<PacienteDeMedico>('/medicos/me/vincular', {
         method: 'POST',
         body: { nombre_usuario: nombreUsuario, pin },
         token,

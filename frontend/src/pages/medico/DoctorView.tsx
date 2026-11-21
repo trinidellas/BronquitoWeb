@@ -6,7 +6,7 @@ import { ConnectPatientModal } from './ConnectPatientModal'
 import { DispositivoPanel } from './DispositivoPanel'
 import { useSession } from '../../auth/session'
 import { ApiError, api } from '../../api/client'
-import type { PacientePerfil } from '../../api/types'
+import type { PacienteDeMedico } from '../../api/types'
 import type { Paciente } from '../../types'
 import { edadDesdeNacimiento } from '../../data/mockData'
 
@@ -21,7 +21,7 @@ function inicialesDe(nombre: string | null, apellido: string | null, nombreUsuar
  * clínicos que el backend todavía no expone (diagnóstico, PIM, resistencia,
  * frecuencia) quedan en placeholder hasta que haya un endpoint real para eso.
  */
-function pacienteDesdeApi(p: PacientePerfil): Paciente {
+function pacienteDesdeApi(p: PacienteDeMedico): Paciente {
   return {
     id: String(p.id_paciente),
     nombre: `${p.nombre ?? ''} ${p.apellido ?? ''}`.trim() || p.nombre_usuario,
@@ -37,6 +37,7 @@ function pacienteDesdeApi(p: PacientePerfil): Paciente {
     frecuenciaSemanal: 0,
     pimInicial: 0,
     pimActual: 0,
+    ultimaSesion: p.ultima_sesion,
   }
 }
 

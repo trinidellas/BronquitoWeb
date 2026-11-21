@@ -1,5 +1,4 @@
 import type {
-  Adherencia,
   DiaRacha,
   Medico,
   Paciente,
@@ -40,11 +39,6 @@ export function edadDesdeNacimiento(fechaIso: string): number {
     (hoy.getMonth() === nacimiento.getMonth() && hoy.getDate() < nacimiento.getDate())
   if (noCumplioAun) edad -= 1
   return edad
-}
-
-export function diasDesde(fecha: string): number {
-  const ms = HOY.getTime() - new Date(fecha).getTime()
-  return Math.max(0, Math.round(ms / (1000 * 60 * 60 * 24)))
 }
 
 // ---------------------------------------------------------------------------
@@ -284,31 +278,6 @@ export function entrenamientosDe(pacienteId: string): SesionEntrenamiento[] {
   return entrenamientos
     .filter((e) => e.pacienteId === pacienteId)
     .sort((a, b) => +new Date(b.fecha) - +new Date(a.fecha))
-}
-
-export function ultimaSesionDe(pacienteId: string): string | undefined {
-  const todas = [...entrenamientosDe(pacienteId), ...evaluacionesDe(pacienteId)].sort(
-    (a, b) => +new Date(b.fecha) - +new Date(a.fecha),
-  )
-  return todas[0]?.fecha
-}
-
-export function adherenciaDe(pacienteId: string): Adherencia {
-  const ultima = ultimaSesionDe(pacienteId)
-  if (!ultima) return 'sin_actividad'
-  const dias = diasDesde(ultima)
-  if (dias <= 2) return 'buena'
-  if (dias <= 6) return 'irregular'
-  return 'sin_actividad'
-}
-
-export function textoUltimaSesion(pacienteId: string): string {
-  const ultima = ultimaSesionDe(pacienteId)
-  if (!ultima) return 'Sin sesiones aún'
-  const dias = diasDesde(ultima)
-  if (dias === 0) return 'Última sesión: hoy'
-  if (dias === 1) return 'Última sesión: ayer'
-  return `Última sesión: hace ${dias} días`
 }
 
 const DIAS_SEMANA = ['LUN', 'MAR', 'MIÉ', 'JUE', 'VIE', 'SÁB', 'DOM']

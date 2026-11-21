@@ -1,6 +1,7 @@
 from datetime import datetime, timezone
 
 from fastapi import APIRouter, Depends, HTTPException
+from sqlalchemy import func
 from sqlalchemy.orm import Session
 
 from app.core.database import get_db
@@ -9,6 +10,7 @@ from app.core.deps import get_current_medico
 from app.core.security import hashear_secreto, verificar_secreto
 from app.core.timezone import hoy_argentina
 from app.models.anotacion import Anotacion
+from app.models.entrenamiento import Entrenamiento
 from app.models.evaluacion import Evaluacion, EvaluacionMuestra
 from app.models.frecuencia_recomendada import FrecuenciaRecomendada
 from app.models.medico import Medico
@@ -20,7 +22,7 @@ from app.schemas.entrenamiento import EntrenamientoOut
 from app.schemas.evaluacion import EvaluacionMuestraOut, EvaluacionOut
 from app.schemas.frecuencia import FrecuenciaCrearRequest, FrecuenciaOut
 from app.schemas.medico import MedicoPerfilOut, MedicoPerfilUpdate, VincularPacienteRequest
-from app.schemas.paciente import PacientePerfilOut
+from app.schemas.paciente import PacienteDeMedicoOut
 from app.schemas.rutina import RutinaOut
 
 router = APIRouter(prefix="/medicos", tags=["medicos"])
@@ -74,18 +76,51 @@ def actualizar_mi_perfil(
     return medico
 
 
-@router.get("/me/pacientes", response_model=list[PacientePerfilOut])
+def _ultimas_sesiones(db: Session, ids_pacientes: list[int]) -> dict[int, datetime]:
+    """
+    La fecha de la última sesión de cada paciente: la evaluación o el
+    entrenamiento más reciente. Los entrenamientos sin fecha no cuentan.
+    Un paciente sin ninguna sesión no aparece en el resultado.
+    """
+    ultimas: dict[int, datetime] = {}
+    if not ids_pacientes:
+        return ultimas
+    for modelo in (Evaluacion, Entrenamiento):
+        filas = (
+            db.query(modelo.id_paciente, func.max(modelo.fecha_hora))
+            .filter(modelo.id_paciente.in_(ids_pacientes))
+            .group_by(modelo.id_paciente)
+            .all()
+        )
+        for id_paciente, fecha in filas:
+            if fecha is not None and (id_paciente not in ultimas or fecha > ultimas[id_paciente]):
+                ultimas[id_paciente] = fecha
+    return ultimas
+
+
+def _con_ultima_sesion(db: Session, pacientes: list[Paciente]) -> list[PacienteDeMedicoOut]:
+    ultimas = _ultimas_sesiones(db, [p.id_paciente for p in pacientes])
+    salida = []
+    for paciente in pacientes:
+        fila = PacienteDeMedicoOut.model_validate(paciente)
+        fila.ultima_sesion = ultimas.get(paciente.id_paciente)
+        salida.append(fila)
+    return salida
+
+
+@router.get("/me/pacientes", response_model=list[PacienteDeMedicoOut])
 def mis_pacientes(medico: Medico = Depends(get_current_medico), db: Session = Depends(get_db)):
-    """Pacientes vinculados a ESTE médico (el que mandó el token), no a cualquiera."""
-    return (
+    """Pacientes vinculados a ESTE médico (el que mandó el token), no a cualquiera, con su última sesión."""
+    pacientes = (
         db.query(Paciente)
         .join(MedicoPaciente, MedicoPaciente.id_paciente == Paciente.id_paciente)
         .filter(MedicoPaciente.id_medico == medico.id_medico)
         .all()
     )
+    return _con_ultima_sesion(db, pacientes)
 
 
-@router.post("/me/vincular", response_model=PacientePerfilOut, status_code=201)
+@router.post("/me/vincular", response_model=PacienteDeMedicoOut, status_code=201)
 def vincular_paciente(
     payload: VincularPacienteRequest,
     medico: Medico = Depends(get_current_medico),
@@ -121,7 +156,7 @@ def vincular_paciente(
     db.add(vinculo)
     db.commit()
 
-    return paciente
+    return _con_ultima_sesion(db, [paciente])[0]
 
 
 @router.delete("/me/pacientes/{id_paciente}", status_code=204)

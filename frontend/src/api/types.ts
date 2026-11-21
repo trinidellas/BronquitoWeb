@@ -50,6 +50,12 @@ export interface PacientePerfil {
   acepto_terminos: boolean
 }
 
+/** Un paciente en la lista del médico: el perfil más su última sesión. */
+export interface PacienteDeMedico extends PacientePerfil {
+  /** La evaluación o el entrenamiento más reciente (fecha y hora, sin zona); null si no tiene ninguna. */
+  ultima_sesion: string | null
+}
+
 export type TipoEvaluacion = 'ESPIROMETRIA' | 'PIM_PEM'
 
 export interface Evaluacion {

@@ -1,4 +1,4 @@
-from datetime import date
+from datetime import date, datetime
 from typing import Literal
 
 from pydantic import BaseModel, ConfigDict, EmailStr, Field, field_validator
@@ -24,6 +24,17 @@ class PacientePerfilOut(BaseModel):
     enfermedades: str | None
     fecha_registro: date
     acepto_terminos: bool
+
+
+class PacienteDeMedicoOut(PacientePerfilOut):
+    """
+    Un paciente en la lista del médico: el perfil más la fecha de su última
+    sesión (la evaluación o el entrenamiento más reciente; null si no tiene
+    ninguna). Con eso la web muestra "Última sesión: hace N días" y el punto
+    de adherencia.
+    """
+
+    ultima_sesion: datetime | None = None
 
 
 class PacientePerfilUpdate(BaseModel):

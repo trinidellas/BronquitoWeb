@@ -5,12 +5,12 @@ import { PasswordField } from '../../components/ui/PasswordField'
 import { errorNombreUsuario, NOMBRE_USUARIO_MAX, normalizarNombreUsuario } from '../../auth/nombreUsuario'
 import { useSession } from '../../auth/session'
 import { ApiError, api } from '../../api/client'
-import type { PacientePerfil } from '../../api/types'
+import type { PacienteDeMedico } from '../../api/types'
 
 interface ConnectPatientModalProps {
   onClose: () => void
   /** Se llama cuando el paciente quedó vinculado a este médico. */
-  onConectado: (paciente: PacientePerfil) => void
+  onConectado: (paciente: PacienteDeMedico) => void
 }
 
 /**

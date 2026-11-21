@@ -38,6 +38,8 @@ export interface Paciente extends UsuarioBase {
   frecuenciaSemanal: number
   pimInicial: number
   pimActual: number
+  /** Fecha y hora de la última evaluación o entrenamiento (de la API); null si no tiene ninguna. */
+  ultimaSesion?: string | null
 }
 
 export interface Medico extends UsuarioBase {

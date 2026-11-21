@@ -1,7 +1,7 @@
 import { useMemo, useState } from 'react'
 import type { Paciente } from '../../types'
 import { AdherenciaDot } from '../../components/ui/Badge'
-import { adherenciaDe, textoUltimaSesion } from '../../data/mockData'
+import { adherenciaDe, textoUltimaSesion } from './adherencia'
 
 interface PatientListPanelProps {
   pacientes: Paciente[]
@@ -61,9 +61,9 @@ export function PatientListPanel({ pacientes, pacienteSeleccionadoId, onSeleccio
             </div>
             <div className="p-info">
               <div className="p-name">{p.nombre}</div>
-              <div className="p-sub">{textoUltimaSesion(p.id)}</div>
+              <div className="p-sub">{textoUltimaSesion(p.ultimaSesion)}</div>
             </div>
-            <AdherenciaDot adherencia={adherenciaDe(p.id)} />
+            <AdherenciaDot adherencia={adherenciaDe(p.ultimaSesion)} />
           </button>
         ))}
         {filtrados.length === 0 && <p className="empty-state">No encontramos pacientes con esa búsqueda.</p>}
