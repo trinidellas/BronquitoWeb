@@ -16,6 +16,7 @@ import {
   valorOGuion,
 } from '../../exportar/pdf'
 import { conFecha } from './entrenamiento/formato'
+import { FranjaResistenciaSvg, fechaDeDia, franjaDeResistencia, textoCambio, textoModo } from './entrenamiento/ResistenciaFranja'
 import { VARIABLES_ENTRENAMIENTO, agruparEnSesiones, seriesDeEntrenamientos, seriesDeEvaluaciones } from './evolucion'
 
 export interface DatosInforme {
@@ -135,6 +136,16 @@ export async function generarInformeGeneral({
         ...VARIABLES_ENTRENAMIENTO.map((v) => valorOGuion(v.valor(e))),
       ]),
     )
+
+    const franja = franjaDeResistencia(entrenamientosCronologicos)
+    if (franja) {
+      pdf.subseccion('Resistencia en el tiempo', 30)
+      pdf.imagen(await graficoAImagen(<FranjaResistenciaSvg {...franja} ancho={720} />))
+      pdf.tabla(
+        ['Fecha', 'Cambio', 'Modo'],
+        [...franja.cambios].reverse().map((c) => [fechaDeDia(c.dia), textoCambio(c), textoModo(c.modo) || '—']),
+      )
+    }
 
     pdf.subseccion('Evolución', ALTO_FILA_GRAFICOS)
     pdf.graficos(await graficosDeEvolucion(seriesDeEntrenamientos(entrenamientosCronologicos), anotaciones))

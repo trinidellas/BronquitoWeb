@@ -335,6 +335,14 @@ export class DocumentoPdf {
     })
   }
 
+  /** Una imagen a todo el ancho (ej. la franja de resistencia). */
+  imagen(imagen: ImagenGrafico): void {
+    const alto = (ANCHO_UTIL * imagen.alto) / imagen.ancho
+    this.reservar(alto + 3)
+    this.doc.addImage(imagen.dataUrl, 'PNG', MARGEN, this.y, ANCHO_UTIL, alto, undefined, 'FAST')
+    this.y += alto + 3
+  }
+
   /** Gráficos de a dos por fila; debajo de cada fila, las notas de sus puntos. */
   graficos(graficos: GraficoPdf[]): void {
     const separacion = 6

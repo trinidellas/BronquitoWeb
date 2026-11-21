@@ -69,6 +69,12 @@ export const VARIABLES_ENTRENAMIENTO: VariableEvolucion<Entrenamiento>[] = [
   { id: 'nivel-resistencia', nombreCorto: 'Resistencia', etiqueta: 'nivel de resistencia', etiquetaEje: 'Nivel de resistencia', unidad: '', valor: (e) => e.nivel_resistencia },
 ]
 
+/**
+ * Las que se grafican como línea. La resistencia no: va en su propia franja
+ * (entrenamiento/ResistenciaFranja.tsx), pero sigue en el CSV y en la tabla del PDF.
+ */
+const VARIABLES_ENTRENAMIENTO_GRAFICOS = VARIABLES_ENTRENAMIENTO.filter((v) => v.id !== 'nivel-resistencia')
+
 /** Fecha y hora para el CSV y el detalle de un punto, ej. "2026-10-11 10:15". */
 function fechaHoraCompleta(fechaHora: string): string {
   return fechaHora.replace('T', ' ').slice(0, 16)
@@ -107,7 +113,7 @@ export function seriesDeEvaluaciones(evaluacionesCronologicas: Evaluacion[]): Se
 }
 
 export function seriesDeEntrenamientos(entrenamientosCronologicos: EntrenamientoConFecha[]): SerieTendencia[] {
-  return construirSeries('entrenamientos', entrenamientosCronologicos, (e) => e.id_entrenamiento, VARIABLES_ENTRENAMIENTO)
+  return construirSeries('entrenamientos', entrenamientosCronologicos, (e) => e.id_entrenamiento, VARIABLES_ENTRENAMIENTO_GRAFICOS)
 }
 
 /**

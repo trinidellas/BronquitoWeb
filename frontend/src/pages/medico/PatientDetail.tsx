@@ -12,6 +12,7 @@ import { TrashIcon } from '../../components/ui/TrashIcon'
 import { FrequencyModal } from './FrequencyModal'
 import { ResistenciaTag } from './ResistenciaEquipo'
 import * as fmtEntrenamiento from './entrenamiento/formato'
+import { ResistenciaFranja } from './entrenamiento/ResistenciaFranja'
 import { formatearFecha, isoArgentina } from '../../data/mockData'
 import { TIPO_CSV, TIPO_PDF, elegirDestino } from '../../exportar/archivos'
 import {
@@ -433,6 +434,8 @@ export function PatientDetail({ paciente, onDesvincular }: PatientDetailProps) {
               ) : (
                 <p className="empty-state">Todavía no hay sesiones de entrenamiento registradas.</p>
               )}
+
+              {entrenamientosCronologicos.length > 0 && <ResistenciaFranja entrenamientos={entrenamientosCronologicos} />}
 
               {entrenamientos.length > 0 && (
                 <div className="table-wrap mt-16">

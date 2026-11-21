@@ -2226,6 +2226,99 @@ button.cal-ribbon {
   vertical-align: middle;
 }
 
+/* --- Franja de resistencia (pages/medico/entrenamiento/ResistenciaFranja.tsx) --- */
+.resistencia-franja {
+  margin-top: 16px;
+  padding: 16px 18px;
+  border: 1.5px solid var(--line);
+  border-radius: 16px;
+  background: var(--card);
+}
+
+.resistencia-franja-titulo {
+  margin: 0;
+  font-family: 'Baloo 2', system-ui, sans-serif;
+  font-size: 18px;
+  font-weight: 800;
+  color: var(--teal-deep);
+}
+
+.resistencia-franja-sub {
+  margin: 2px 0 10px;
+  font-size: 12.5px;
+  color: var(--ink-soft);
+}
+
+.resistencia-franja svg[data-grafico] {
+  display: block;
+}
+
+.resistencia-cambios-titulo {
+  margin: 10px 0 2px;
+  font-size: 11.5px;
+  font-weight: 800;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--ink-soft);
+}
+
+.resistencia-cambios {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+
+.resistencia-cambio {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-height: 32px;
+  border-bottom: 1px solid var(--line);
+  font-size: 13px;
+}
+
+.resistencia-cambio:last-child {
+  border-bottom: none;
+}
+
+.resistencia-cambio-fecha {
+  flex: none;
+  width: 56px;
+  font-weight: 800;
+}
+
+.resistencia-cambio-texto {
+  flex: 1;
+  min-width: 0;
+}
+
+.resistencia-modo {
+  flex: none;
+  padding: 2px 9px;
+  border-radius: 999px;
+  font-size: 11px;
+  font-weight: 800;
+}
+
+.resistencia-modo-manual {
+  background: var(--pink-soft);
+  color: var(--pink-deep);
+}
+
+.resistencia-modo-automatico {
+  background: var(--teal-pale);
+  color: var(--teal-deep);
+}
+
+.resistencia-ver-todos {
+  margin-top: 6px;
+  padding: 4px 0;
+  border: none;
+  background: none;
+  font-family: inherit;
+  cursor: pointer;
+}
+
 /* --- Visor de entrenamientos (pages/medico/entrenamiento/TrainingViewer.tsx) --- */
 .ent-encabezado {
   display: flex;
