@@ -10,7 +10,7 @@ import { MonthCalendar } from '../../components/ui/MonthCalendar'
 import { Modal } from '../../components/ui/Modal'
 import { TrashIcon } from '../../components/ui/TrashIcon'
 import { FrequencyModal } from './FrequencyModal'
-import { ResistenciaTag } from './ResistenciaEquipo'
+import { TagsEquipo } from './ResistenciaEquipo'
 import * as fmtEntrenamiento from './entrenamiento/formato'
 import { ResistenciaFranja } from './entrenamiento/ResistenciaFranja'
 import { formatearFecha, isoArgentina } from '../../data/mockData'
@@ -284,7 +284,7 @@ export function PatientDetail({ paciente, onDesvincular }: PatientDetailProps) {
               Resistencia actual: {rutina ? `Nivel ${rutina.resistencia_activa}` : 'sin definir'}
             </span>
             {token && (
-              <ResistenciaTag token={token} idPaciente={Number(paciente.id)} nombrePaciente={paciente.nombre} />
+              <TagsEquipo token={token} idPaciente={Number(paciente.id)} nombrePaciente={paciente.nombre} />
             )}
             <button
               className="tag tag-clickable"

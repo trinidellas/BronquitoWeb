@@ -5,6 +5,9 @@ Lo que el médico fija desde la web y viaja al equipo en
 - La resistencia de la válvula: modo automático o manual, y el nivel manual
   (1 = más abierta … 5 = más cerrada). El nivel automático lo calcula y lo
   guarda sólo el equipo: la web no lo manda ni lo conoce.
+- Las repeticiones por sesión: cuántas respiraciones contra la válvula le
+  pide el equipo en cada entrenamiento (vuelven en cada sesión como
+  `ciclos_objetivo`).
 - Para pacientes con sexo "X": qué ecuación (hombre o mujer) usar para los
   valores predichos.
 
@@ -24,6 +27,7 @@ from app.core.deps import get_current_medico
 from app.core.predichos import predichos, sexo_para_ecuacion
 from app.core.timezone import hoy_argentina
 from app.models.configuracion_dispositivo import (
+    ConfiguracionRepeticiones,
     ConfiguracionResistencia,
     EcuacionPredichos,
     FrecuenciaConfirmada,
@@ -36,6 +40,8 @@ from app.models.paciente import Paciente
 router = APIRouter(prefix="/medicos/me/pacientes/{id_paciente}", tags=["resistencia (medico)"])
 
 NIVEL_POR_DEFECTO = 3
+REPETICIONES_MIN = 1
+REPETICIONES_MAX = 100
 
 
 # --- Schemas (acá mismo: sólo los usa este router) ------------------------------
@@ -59,6 +65,19 @@ class ResistenciaOut(BaseModel):
         return _iso_utc(valor)
 
 
+class RepeticionesOut(BaseModel):
+    id_repeticiones: int
+    repeticiones: int
+    enviado: str
+    creado_en: datetime
+    # Cuándo la guardó el equipo; null = todavía no sincronizó.
+    confirmada_en: datetime | None
+
+    @field_serializer("creado_en", "confirmada_en")
+    def _fechas(self, valor: datetime | None) -> str | None:
+        return _iso_utc(valor)
+
+
 class PredichosOut(BaseModel):
     fvc_predicha_L: float | None
     pim_predicha_cmh2o: float | None
@@ -68,6 +87,8 @@ class ConfiguracionEquipoOut(BaseModel):
     """Lo que muestra el modal de resistencia en la ficha del paciente."""
 
     resistencia: ResistenciaOut | None
+    # Null si el médico todavía no las fijó (el equipo usa las suyas).
+    repeticiones: RepeticionesOut | None
     sexo: str
     # 'M' / 'F' que se usa para los predichos; para un "X" sin elegir, null.
     sexo_ecuacion: str | None
@@ -80,6 +101,10 @@ class ResistenciaCrearRequest(BaseModel):
     modo: Literal["automatico", "manual"]
     # En automático se puede omitir: se conserva el último nivel manual.
     nivel_manual: int | None = Field(default=None, ge=1, le=5)
+
+
+class RepeticionesCrearRequest(BaseModel):
+    repeticiones: int = Field(ge=REPETICIONES_MIN, le=REPETICIONES_MAX)
 
 
 class EcuacionPredichosRequest(BaseModel):
@@ -110,8 +135,18 @@ def _ultima_resistencia(id_paciente: int, db: Session) -> ConfiguracionResistenc
     )
 
 
+def _ultimas_repeticiones(id_paciente: int, db: Session) -> ConfiguracionRepeticiones | None:
+    return (
+        db.query(ConfiguracionRepeticiones)
+        .filter(ConfiguracionRepeticiones.id_paciente == id_paciente)
+        .order_by(ConfiguracionRepeticiones.id_repeticiones.desc())
+        .first()
+    )
+
+
 def _configuracion(paciente: Paciente, db: Session) -> ConfiguracionEquipoOut:
     resistencia = _ultima_resistencia(paciente.id_paciente, db)
+    repeticiones = _ultimas_repeticiones(paciente.id_paciente, db)
 
     frecuencia = (
         db.query(FrecuenciaRecomendada)
@@ -135,6 +170,13 @@ def _configuracion(paciente: Paciente, db: Session) -> ConfiguracionEquipoOut:
             creado_en=resistencia.creado_en,
             confirmada_en=resistencia.confirmada_en,
         ) if resistencia else None,
+        repeticiones=RepeticionesOut(
+            id_repeticiones=repeticiones.id_repeticiones,
+            repeticiones=repeticiones.repeticiones,
+            enviado=repeticiones.enviado.isoformat(),
+            creado_en=repeticiones.creado_en,
+            confirmada_en=repeticiones.confirmada_en,
+        ) if repeticiones else None,
         sexo=paciente.sexo,
         sexo_ecuacion=sexo_para_ecuacion(paciente, db),
         predichos=PredichosOut(**predichos(paciente, db)),
@@ -178,6 +220,29 @@ def fijar_resistencia(
         id_medico=medico.id_medico,
         modo=payload.modo,
         nivel_manual=nivel,
+        enviado=hoy_argentina(),
+        creado_en=_ahora_utc(),
+    ))
+    db.commit()
+    return _configuracion(paciente, db)
+
+
+@router.post("/repeticiones", response_model=ConfiguracionEquipoOut, status_code=201)
+def fijar_repeticiones(
+    id_paciente: int,
+    payload: RepeticionesCrearRequest,
+    medico: Medico = Depends(get_current_medico),
+    db: Session = Depends(get_db),
+):
+    """
+    Como la resistencia: agrega una fila nueva (otro id), así el equipo se da
+    cuenta de que cambió la próxima vez que sincroniza.
+    """
+    paciente = _paciente_vinculado(medico, id_paciente, db)
+    db.add(ConfiguracionRepeticiones(
+        id_paciente=paciente.id_paciente,
+        id_medico=medico.id_medico,
+        repeticiones=payload.repeticiones,
         enviado=hoy_argentina(),
         creado_en=_ahora_utc(),
     ))

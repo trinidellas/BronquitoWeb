@@ -6,7 +6,8 @@ migrar nada.
 
 Reparto de quién es dueño de qué (para que la web y el equipo nunca
 escriban el mismo dato):
-  - La web: el modo de la resistencia (automático/manual) y el nivel manual.
+  - La web: el modo de la resistencia (automático/manual), el nivel manual y
+    las repeticiones por sesión.
   - El equipo: el nivel automático. Lo calcula después de cada evaluación y
     lo guarda sólo en su SD; la web no lo manda ni lo guarda.
 """
@@ -48,6 +49,30 @@ class ConfiguracionResistencia(Base):
     enviado: Mapped[date] = mapped_column(Date)
     creado_en: Mapped[datetime] = mapped_column(DateTime)
     # Cuándo el equipo avisó que la guardó (POST /dispositivo/resistencia/confirmar).
+    confirmada_en: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
+
+
+class ConfiguracionRepeticiones(Base):
+    """
+    TABLA CONFIGURACION_REPETICIONES — historial de cuántas repeticiones
+    (respiraciones contra la válvula) le pide el equipo al paciente en cada
+    sesión de entrenamiento. Es lo que después vuelve en cada sesión como
+    `ciclos_objetivo`. Como `configuracion_resistencia`, cada cambio agrega
+    una fila: la vigente es la de `id_repeticiones` más alto del paciente.
+    """
+
+    __tablename__ = "configuracion_repeticiones"
+
+    id_repeticiones: Mapped[int] = mapped_column(primary_key=True, autoincrement=True)
+    id_paciente: Mapped[int] = mapped_column(ForeignKey("usuarios.id_paciente"), index=True)
+    id_medico: Mapped[int] = mapped_column(ForeignKey("medicos.id_medico"))
+
+    repeticiones: Mapped[int] = mapped_column(Integer)
+
+    # Fecha (Argentina) en que el médico la fijó: viaja al equipo como "enviado".
+    enviado: Mapped[date] = mapped_column(Date)
+    creado_en: Mapped[datetime] = mapped_column(DateTime)
+    # Cuándo el equipo avisó que la guardó (POST /dispositivo/repeticiones/confirmar).
     confirmada_en: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
 
 

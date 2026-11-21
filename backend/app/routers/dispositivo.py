@@ -53,7 +53,11 @@ from app.core.evaluaciones_dispositivo import guardar_prueba
 from app.core.predichos import predichos
 from app.core.security import verificar_secreto
 from app.core.timezone import ARGENTINA, hoy_argentina
-from app.models.configuracion_dispositivo import ConfiguracionResistencia, FrecuenciaConfirmada
+from app.models.configuracion_dispositivo import (
+    ConfiguracionRepeticiones,
+    ConfiguracionResistencia,
+    FrecuenciaConfirmada,
+)
 from app.models.dispositivo import (
     ESTADOS_ACTIVOS,
     Dispositivo,
@@ -65,6 +69,7 @@ from app.models.frecuencia_recomendada import FrecuenciaRecomendada
 from app.models.paciente import Paciente
 from app.schemas.dispositivo import (
     ConfirmarFrecuenciaRequest,
+    ConfirmarRepeticionesRequest,
     ConfirmarRequest,
     ConfirmarResistenciaRequest,
     IdentificarRequest,
@@ -370,14 +375,16 @@ def _paciente_del_pedido(usuario: str, dispositivo: Dispositivo, db: Session) ->
 @router.get("/frecuencia")
 def configuracion(usuario: str, db: Session = Depends(get_db)):
     """
-    Lo que el equipo guarda para entrenar. Tres objetos independientes (el
-    equipo guarda y confirma cada uno por separado):
+    Lo que el equipo guarda para entrenar. Objetos independientes (el equipo
+    guarda y confirma cada uno por separado):
       - "frecuencia": la vigente hoy (la última que fijó el médico).
       - "resistencia_web": modo y nivel manual que fijó el médico.
+      - "repeticiones": cuántas respiraciones pide en cada sesión.
       - "predichos": FVC y PIM predichas, recalculadas en cada pedido.
-    "frecuencia" y "resistencia_web" se omiten si el médico todavía no las
-    fijó (sin "resistencia_web" el equipo usa el modo automático). En
-    "predichos", el valor que no se pueda calcular va en null.
+    "frecuencia", "resistencia_web" y "repeticiones" se omiten si el médico
+    todavía no las fijó (sin "resistencia_web" el equipo usa el modo
+    automático; sin "repeticiones", las suyas). En "predichos", el valor que
+    no se pueda calcular va en null.
     """
     dispositivo = obtener_dispositivo(db)
     dispositivo.ultimo_contacto = ahora_utc()
@@ -416,12 +423,26 @@ def configuracion(usuario: str, db: Session = Depends(get_db)):
             "enviado": resistencia.enviado.isoformat(),
         }
 
+    repeticiones = (
+        db.query(ConfiguracionRepeticiones)
+        .filter(ConfiguracionRepeticiones.id_paciente == paciente.id_paciente)
+        .order_by(ConfiguracionRepeticiones.id_repeticiones.desc())
+        .first()
+    )
+    if repeticiones is not None:
+        respuesta["repeticiones"] = {
+            "id": repeticiones.id_repeticiones,
+            "repeticiones": repeticiones.repeticiones,
+            "enviado": repeticiones.enviado.isoformat(),
+        }
+
     respuesta["predichos"] = predichos(paciente, db)
 
     registrar(
         db, dispositivo, "CONFIGURACION",
         f"frecuencia={frecuencia.id_frecuencia if frecuencia else None} "
-        f"resistencia={resistencia.id_resistencia if resistencia else None} {respuesta['predichos']}",
+        f"resistencia={resistencia.id_resistencia if resistencia else None} "
+        f"repeticiones={repeticiones.id_repeticiones if repeticiones else None} {respuesta['predichos']}",
     )
     db.commit()
     return respuesta
@@ -459,6 +480,23 @@ def confirmar_resistencia(payload: ConfirmarResistenciaRequest, db: Session = De
     )
     db.commit()
     return {"ok": True, "registrada": resistencia is not None}
+
+
+@router.post("/repeticiones/confirmar")
+def confirmar_repeticiones(payload: ConfirmarRepeticionesRequest, db: Session = Depends(get_db)):
+    """Igual que confirmar_frecuencia, para "repeticiones"."""
+    dispositivo = obtener_dispositivo(db)
+    dispositivo.ultimo_contacto = ahora_utc()
+
+    repeticiones = db.get(ConfiguracionRepeticiones, payload.id_repeticiones)
+    if repeticiones is not None and repeticiones.confirmada_en is None:
+        repeticiones.confirmada_en = ahora_utc()
+    registrar(
+        db, dispositivo, "REPETICIONES_OK",
+        f"repeticiones {payload.id_repeticiones} existe={repeticiones is not None}",
+    )
+    db.commit()
+    return {"ok": True, "registrada": repeticiones is not None}
 
 
 # --- Entrenamientos de la SD ------------------------------------------------------

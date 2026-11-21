@@ -1,30 +1,40 @@
 import { useEffect, useState } from 'react'
 import { Modal } from '../../components/ui/Modal'
-import { apiResistencia } from '../../api/resistencia'
+import { REPETICIONES_MAX, REPETICIONES_MIN, apiResistencia } from '../../api/resistencia'
 import type { ConfiguracionEquipo, ModoResistencia } from '../../api/resistencia'
 
-interface ResistenciaTagProps {
+interface TagsEquipoProps {
   token: string
   idPaciente: number
   nombrePaciente: string
 }
 
 const NIVELES = [1, 2, 3, 4, 5]
+/** Lo que se propone en el modal si el médico todavía no fijó ninguna. */
+const REPETICIONES_SUGERIDAS = 30
 
-function textoTag(config: ConfiguracionEquipo | null): string {
+function textoTagResistencia(config: ConfiguracionEquipo | null): string {
   if (!config) return 'Modo de resistencia: …'
   const r = config.resistencia
   if (!r || r.modo === 'automatico') return 'Modo de resistencia: automático'
   return `Modo de resistencia: manual (nivel ${r.nivel_manual})`
 }
 
+function textoTagRepeticiones(config: ConfiguracionEquipo | null): string {
+  if (!config) return 'Repeticiones: …'
+  const r = config.repeticiones
+  return r ? `Repeticiones: ${r.repeticiones} por sesión` : 'Repeticiones: sin definir'
+}
+
 /**
- * Tag de la ficha del paciente: muestra cómo está fijada la resistencia de la
- * válvula y, al tocarlo, abre el modal para cambiarla.
+ * Tags de la ficha del paciente con lo que viaja al equipo cuando sincroniza:
+ * cómo se fija la resistencia de la válvula y cuántas repeticiones pide en
+ * cada sesión. Cada uno abre su modal para cambiarlo, y muestra un punto
+ * amarillo hasta que el equipo confirma que lo guardó.
  */
-export function ResistenciaTag({ token, idPaciente, nombrePaciente }: ResistenciaTagProps) {
+export function TagsEquipo({ token, idPaciente, nombrePaciente }: TagsEquipoProps) {
   const [config, setConfig] = useState<ConfiguracionEquipo | null>(null)
-  const [abierto, setAbierto] = useState(false)
+  const [abierto, setAbierto] = useState<'resistencia' | 'repeticiones' | null>(null)
 
   useEffect(() => {
     let vigente = true
@@ -37,26 +47,45 @@ export function ResistenciaTag({ token, idPaciente, nombrePaciente }: Resistenci
     }
   }, [token, idPaciente])
 
-  const pendiente = config?.resistencia != null && config.resistencia.confirmada_en == null
+  const resistenciaPendiente = config?.resistencia != null && config.resistencia.confirmada_en == null
+  const repeticionesPendientes = config?.repeticiones != null && config.repeticiones.confirmada_en == null
 
   return (
     <>
       <button
         className="tag tag-clickable"
-        onClick={() => setAbierto(true)}
-        title={pendiente ? 'Todavía no llegó al equipo' : 'Modificar resistencia'}
+        onClick={() => setAbierto('resistencia')}
+        title={resistenciaPendiente ? 'Todavía no llegó al equipo' : 'Modificar resistencia'}
       >
-        {textoTag(config)}
-        {pendiente && <span className="resistencia-pendiente" aria-label="sin sincronizar" />}
+        {textoTagResistencia(config)}
+        {resistenciaPendiente && <span className="resistencia-pendiente" aria-label="sin sincronizar" />}
       </button>
-      {abierto && (
+      <button
+        className="tag tag-clickable"
+        onClick={() => setAbierto('repeticiones')}
+        title={repeticionesPendientes ? 'Todavía no llegó al equipo' : 'Modificar repeticiones'}
+      >
+        {textoTagRepeticiones(config)}
+        {repeticionesPendientes && <span className="resistencia-pendiente" aria-label="sin sincronizar" />}
+      </button>
+      {abierto === 'resistencia' && (
         <ResistenciaModal
           token={token}
           idPaciente={idPaciente}
           nombrePaciente={nombrePaciente}
           configInicial={config}
           onCambio={setConfig}
-          onClose={() => setAbierto(false)}
+          onClose={() => setAbierto(null)}
+        />
+      )}
+      {abierto === 'repeticiones' && (
+        <RepeticionesModal
+          token={token}
+          idPaciente={idPaciente}
+          nombrePaciente={nombrePaciente}
+          configInicial={config}
+          onCambio={setConfig}
+          onClose={() => setAbierto(null)}
         />
       )}
     </>
@@ -208,6 +237,109 @@ function ResistenciaModal({ token, idPaciente, nombrePaciente, configInicial, on
           {r.confirmada_en
             ? 'El equipo ya tiene la configuración actual.'
             : 'La configuración actual todavía no llegó al equipo.'}
+        </p>
+      )}
+      {error && <div className="auth-alert error">{error}</div>}
+    </Modal>
+  )
+}
+
+/** Cuántas repeticiones (respiraciones contra la válvula) pide el equipo en cada sesión de entrenamiento. */
+function RepeticionesModal({ token, idPaciente, nombrePaciente, configInicial, onCambio, onClose }: ResistenciaModalProps) {
+  const actual = configInicial?.repeticiones
+  const [texto, setTexto] = useState(String(actual?.repeticiones ?? REPETICIONES_SUGERIDAS))
+  const [guardando, setGuardando] = useState(false)
+  const [error, setError] = useState<string | null>(null)
+
+  const valor = Number(texto)
+  const valido = Number.isInteger(valor) && valor >= REPETICIONES_MIN && valor <= REPETICIONES_MAX
+  const sinCambios = actual != null && valor === actual.repeticiones
+
+  function sumar(delta: number) {
+    const base = valido ? valor : actual?.repeticiones ?? REPETICIONES_SUGERIDAS
+    setTexto(String(Math.min(REPETICIONES_MAX, Math.max(REPETICIONES_MIN, base + delta))))
+  }
+
+  async function guardar() {
+    if (!valido) return
+    setGuardando(true)
+    setError(null)
+    try {
+      onCambio(await apiResistencia.fijarRepeticiones(token, idPaciente, valor))
+      onClose()
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'No pudimos guardar el cambio.')
+      setGuardando(false)
+    }
+  }
+
+  return (
+    <Modal
+      titulo="Repeticiones por sesión"
+      onClose={onClose}
+      acciones={
+        <>
+          <button className="btn btn-outline" onClick={onClose} disabled={guardando}>
+            Cancelar
+          </button>
+          <button className="btn btn-teal" onClick={guardar} disabled={guardando || !valido || sinCambios}>
+            {guardando ? 'Guardando…' : 'Guardar'}
+          </button>
+        </>
+      }
+    >
+      <p>
+        Cuántas repeticiones (respiraciones contra la válvula) tiene que hacer {nombrePaciente} en cada sesión de
+        entrenamiento. El cambio llega al equipo la próxima vez que se conecte.
+      </p>
+
+      <div className="field">
+        <label htmlFor="repeticiones-input">Repeticiones</label>
+        <div className="repeticiones-stepper">
+          <button
+            type="button"
+            className="freq-option"
+            onClick={() => sumar(-1)}
+            disabled={valido && valor <= REPETICIONES_MIN}
+            aria-label="Una repetición menos"
+          >
+            −
+          </button>
+          <input
+            id="repeticiones-input"
+            type="number"
+            inputMode="numeric"
+            min={REPETICIONES_MIN}
+            max={REPETICIONES_MAX}
+            step={1}
+            value={texto}
+            onChange={(e) => setTexto(e.target.value)}
+            onKeyDown={(e) => {
+              if (e.key === 'Enter') void guardar()
+            }}
+          />
+          <button
+            type="button"
+            className="freq-option"
+            onClick={() => sumar(1)}
+            disabled={valido && valor >= REPETICIONES_MAX}
+            aria-label="Una repetición más"
+          >
+            +
+          </button>
+        </div>
+        {!valido && (
+          <p className="field-hint">
+            Tiene que ser un número entero entre {REPETICIONES_MIN} y {REPETICIONES_MAX}.
+          </p>
+        )}
+      </div>
+
+      {actual && (
+        <p className="resistencia-ayuda">
+          {actual.confirmada_en
+            ? `El equipo ya tiene las ${actual.repeticiones} repeticiones actuales.`
+            : `Las ${actual.repeticiones} repeticiones actuales todavía no llegaron al equipo.`}
         </p>
       )}
       {error && <div className="auth-alert error">{error}</div>}
