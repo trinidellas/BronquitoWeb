@@ -1,7 +1,6 @@
 
 import { useEffect, useMemo, useState } from 'react'
 import { diasVigentesEn, MonthCalendar } from '../../components/ui/MonthCalendar'
-import { DeviceSessionModal } from '../../components/ui/DeviceSessionModal'
 import { VideoLightbox } from '../../components/ui/VideoLightbox'
 import { VideoCarousel } from '../../components/ui/VideoCarousel'
 import type { VideoTutorial } from '../../components/ui/VideoCarousel'
@@ -31,7 +30,6 @@ function diaDeSemana(fecha: Date): number {
 
 export function PatientDashboard() {
   const [subVista, setSubVista] = useState<SubVista>('resumen')
-  const [sesionAbierta, setSesionAbierta] = useState<'entrenamiento' | 'evaluacion' | null>(null)
   const [videoAbierto, setVideoAbierto] = useState<{ id: string; titulo: string } | null>(null)
 
   const { perfil, token } = useSession()
@@ -242,11 +240,6 @@ export function PatientDashboard() {
                 </>
               )}
             </div>
-            {frecuenciaCargada && !errorFrecuencia && hayEntrenamientoHoy && (
-              <button className="btn btn-light" onClick={() => setSesionAbierta('entrenamiento')}>
-                Iniciar sesión de hoy
-              </button>
-            )}
             {esDiaDescanso && (
               <img
                 className="hero-chill"
@@ -292,7 +285,7 @@ export function PatientDashboard() {
               <h3>Evaluaciones</h3>
             </div>
             <div className="card">
-              <p style={{ fontSize: 13.5, color: 'var(--ink-soft)', marginBottom: 14 }}>
+              <p style={{ fontSize: 13.5, color: 'var(--ink-soft)' }}>
                 {cargandoEvaluaciones
                   ? 'Cargando tu última evaluación…'
                   : errorEvaluaciones
@@ -301,9 +294,6 @@ export function PatientDashboard() {
                 La evaluación mide qué tan fuerte y eficiente es tu respiración para ajustar la resistencia del
                 dispositivo.
               </p>
-              <button className="btn btn-outline btn-sm" onClick={() => setSesionAbierta('evaluacion')}>
-                Iniciar evaluación
-              </button>
             </div>
           </section>
         </>
@@ -331,9 +321,6 @@ export function PatientDashboard() {
         </div>
       )}
 
-      {sesionAbierta && (
-        <DeviceSessionModal tipo={sesionAbierta} onClose={() => setSesionAbierta(null)} />
-      )}
       {videoAbierto && (
         <VideoLightbox
           videoId={videoAbierto.id}

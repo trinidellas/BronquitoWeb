@@ -372,9 +372,3 @@ export function resumenProgresoDe(pacienteId: string): ResumenProgreso {
     rachaActualDias: rachaActualDias(pacienteId),
   }
 }
-
-export function formatearDuracion(segundos: number): string {
-  const m = Math.floor(segundos / 60)
-  const s = segundos % 60
-  return `${m}:${s.toString().padStart(2, '0')}`
-}
