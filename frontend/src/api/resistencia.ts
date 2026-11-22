@@ -31,7 +31,7 @@ export interface ConfiguracionRepeticiones {
 }
 
 export const REPETICIONES_MIN = 1
-export const REPETICIONES_MAX = 100
+export const REPETICIONES_MAX = 30
 
 export interface ConfiguracionEquipo {
   resistencia: ConfiguracionResistencia | null

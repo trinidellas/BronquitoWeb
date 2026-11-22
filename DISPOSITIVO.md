@@ -624,7 +624,7 @@ Los objetos son independientes: el equipo guarda y confirma cada uno por separad
   sesión como `ciclos_objetivo`. **Se omite** si el médico todavía no las fijó; en ese
   caso el equipo usa las suyas.
   - `id`: cambia cada vez que el médico las modifica.
-  - `repeticiones`: entero de 1 a 100.
+  - `repeticiones`: entero de 1 a 30.
   - `enviado`: AAAA-MM-DD en que el médico las fijó.
   - **El firmware todavía no las lee**: hasta que lo haga, la web las muestra como
     pendientes.
@@ -806,7 +806,7 @@ y los errores con el formato de siempre de FastAPI (`{"detail": "..."}`).
 | `GET /pacientes/me/dispositivo` | paciente | Código para conectar, última conexión y si el dispositivo tiene su PIN actual |
 | `GET /medicos/me/pacientes/{id}/configuracion-equipo` | médico | Resistencia y repeticiones vigentes, predichos y si el equipo ya los recibió |
 | `POST /medicos/me/pacientes/{id}/resistencia` | médico | Fija modo (`automatico`/`manual`) y `nivel_manual` (1–5); crea un id nuevo |
-| `POST /medicos/me/pacientes/{id}/repeticiones` | médico | Fija `repeticiones` por sesión (1–100); crea un id nuevo |
+| `POST /medicos/me/pacientes/{id}/repeticiones` | médico | Fija `repeticiones` por sesión (1–30); crea un id nuevo |
 | `GET /medicos/me/pacientes/{id}/entrenamientos` | médico | Lista de sesiones (más recientes primero, las sin fecha al final) |
 | `GET /medicos/me/pacientes/{id}/entrenamientos/{id_ent}` | médico | Una sesión con sus ciclos |
 | `GET /medicos/me/pacientes/{id}/entrenamientos/{id_ent}/senal` | médico | La señal del CSV (tiempo, presión, flujo); 404 si no hay |

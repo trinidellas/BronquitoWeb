@@ -41,7 +41,7 @@ router = APIRouter(prefix="/medicos/me/pacientes/{id_paciente}", tags=["resisten
 
 NIVEL_POR_DEFECTO = 3
 REPETICIONES_MIN = 1
-REPETICIONES_MAX = 100
+REPETICIONES_MAX = 30
 
 
 # --- Schemas (acá mismo: sólo los usa este router) ------------------------------

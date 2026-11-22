@@ -305,15 +305,16 @@ function RepeticionesModal({ token, idPaciente, nombrePaciente, configInicial, o
           >
             −
           </button>
+          {/* Texto y no "number": así sólo entran dígitos (ni "-", ni coma, ni la "e" que acepta un number). */}
           <input
             id="repeticiones-input"
-            type="number"
+            type="text"
             inputMode="numeric"
-            min={REPETICIONES_MIN}
-            max={REPETICIONES_MAX}
-            step={1}
+            pattern="[0-9]*"
+            maxLength={2}
+            autoComplete="off"
             value={texto}
-            onChange={(e) => setTexto(e.target.value)}
+            onChange={(e) => setTexto(e.target.value.replace(/\D/g, '').slice(0, 2))}
             onKeyDown={(e) => {
               if (e.key === 'Enter') void guardar()
             }}
