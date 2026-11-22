@@ -44,7 +44,9 @@ app/
                         vincular un paciente existente por nombre de usuario + PIN,
                         y las notas sobre gráficos y sesiones
                         (`/medicos/me/pacientes/{id}/anotaciones`: listar, crear,
-                        editar y borrar — sólo el autor edita/borra).
+                        editar y borrar — sólo el autor edita/borra), y marcar
+                        mediciones como fallidas para sacarlas de los gráficos y
+                        el informe (`PUT /medicos/me/pacientes/{id}/mediciones-ocultas`).
     pacientes.py            Perfil y edición de datos del paciente logueado
                         mediante `PATCH /pacientes/me`.
 ```
@@ -63,10 +65,12 @@ app/
 | `rutina` | `Rutina` | `models/rutina.py` |
 | `notas_medicas` | `NotaMedica` | `models/nota_medica.py` |
 
-Además de esas 9, hay dos tablas que son sólo de la web (el dispositivo no las sincroniza):
-`frecuencia_recomendada` (`FrecuenciaRecomendada`) y `anotaciones` (`Anotacion`, en
+Además de esas 9, hay tablas que son sólo de la web (el dispositivo no las sincroniza):
+`frecuencia_recomendada` (`FrecuenciaRecomendada`), `anotaciones` (`Anotacion`, en
 `models/anotacion.py`) — las notas que los médicos dejan en un punto de un gráfico o como
-comentario general de una sesión. No confundir con `notas_medicas`, que son mensajes para el
+comentario general de una sesión — y `mediciones_ocultas` (`MedicionOculta`, en
+`models/medicion_oculta.py`), las evaluaciones y entrenamientos que un médico marcó como
+fallidos. No confundir `anotaciones` con `notas_medicas`, que son mensajes para el
 paciente. `create_all()` crea las tablas nuevas solas al arrancar: no hace falta borrar la base.
 
 La tabla de pacientes se llama `usuarios` en MySQL (así la nombraron en el documento de

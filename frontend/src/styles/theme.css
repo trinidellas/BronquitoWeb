@@ -946,6 +946,55 @@ tr:last-child td {
   flex-wrap: wrap;
 }
 
+/* --- Mediciones marcadas como fallidas (el ojito de las tablas de la ficha) --- */
+th.celda-ojo,
+td.celda-ojo {
+  width: 1%;
+  padding-right: 0;
+}
+
+.btn-ojo {
+  width: 34px;
+  height: 34px;
+  padding: 0;
+  border: 1.5px solid var(--line);
+  border-radius: 50%;
+  background: #fff;
+  color: var(--teal-deep);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  transition: 0.15s;
+}
+
+.btn-ojo:hover {
+  border-color: var(--teal);
+  background: var(--teal-pale);
+}
+
+.btn-ojo-oculta {
+  color: var(--ink-soft);
+  background: #eef3f4;
+}
+
+/* La fila se ve en gris, pero el ojo no, así se encuentra para volver a mostrarla. */
+tr.fila-oculta td {
+  background: #f4f7f8;
+  color: #567076;
+}
+
+/* En gris también los badges y botones de la fila; el texto sigue legible (4.8:1). */
+tr.fila-oculta td:not(.celda-ojo) {
+  filter: grayscale(1);
+}
+
+.nota-ocultas {
+  font-size: 12px;
+  color: var(--ink-soft);
+  margin-top: 8px;
+}
+
 .signal-page-bg {
   min-height: 100vh;
   background: linear-gradient(180deg, #ddf6fb, #b9e9f2);

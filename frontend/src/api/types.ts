@@ -70,6 +70,8 @@ export interface Evaluacion {
   pim: number | null
   temperatura: number | null
   humedad: number | null
+  /** Sólo en la vista del médico: la marcaron como fallida (no va en gráficos, CSV ni informe). */
+  oculta?: boolean
 }
 
 export interface EvaluacionMuestras {
@@ -113,6 +115,8 @@ export interface Entrenamiento {
   tiene_senal: boolean
   promedios: PromediosEntrenamiento | null
   multiciclo: MulticicloEntrenamiento | null
+  /** Sólo en la vista del médico: la marcaron como fallida (no va en gráficos, CSV ni informe). */
+  oculta?: boolean
 }
 
 /** Un entrenamiento con fecha: los únicos que se pueden ubicar en la evolución. */

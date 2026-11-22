@@ -18,6 +18,7 @@ from app.models.evaluacion import Evaluacion, EvaluacionMuestra
 from app.models.frecuencia_recomendada import FrecuenciaRecomendada
 from app.models.medico import Medico
 from app.models.medico_paciente import MedicoPaciente
+from app.models.medicion_oculta import MedicionOculta
 from app.models.nota_medica import NotaMedica
 from app.models.paciente import Paciente
 from app.models.rutina import Rutina
@@ -38,6 +39,7 @@ __all__ = [
     # de la web, no la sincroniza el dispositivo.
     "FrecuenciaRecomendada",  # tabla frecuencia_recomendada
     "Anotacion",  # tabla anotaciones (notas de los médicos en gráficos/sesiones)
+    "MedicionOculta",  # tabla mediciones_ocultas (las que el médico marcó como fallidas)
     # Conexión con la ESP (ver app/models/dispositivo.py).
     "Dispositivo",  # tabla dispositivo
     "SolicitudDispositivo",  # tabla solicitudes_dispositivo

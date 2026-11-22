@@ -9,6 +9,7 @@ import { TrendChartCarousel } from '../../components/ui/TrendChartCarousel'
 import { MonthCalendar } from '../../components/ui/MonthCalendar'
 import { Modal } from '../../components/ui/Modal'
 import { TrashIcon } from '../../components/ui/TrashIcon'
+import { EyeIcon } from '../../components/ui/EyeIcon'
 import { FrequencyModal } from './FrequencyModal'
 import { TagsEquipo } from './ResistenciaEquipo'
 import * as fmtEntrenamiento from './entrenamiento/formato'
@@ -157,7 +158,6 @@ export function PatientDetail({ paciente, onDesvincular }: PatientDetailProps) {
   // La espirometría y el PIM de una misma sesión de consultorio van en una sola fila de la tabla.
   const sesiones = useMemo(() => agruparEnSesiones(evaluaciones), [evaluaciones])
 
-  const ultimaEvaluacion = evaluaciones[0]
   const hoy = new Date()
   const hoyIso = isoArgentina(hoy)
 
@@ -193,20 +193,53 @@ export function PatientDetail({ paciente, onDesvincular }: PatientDetailProps) {
     return mapa
   }, [evaluaciones])
 
-  const evaluacionesCronologicas = [...evaluaciones].reverse()
+  // Las mediciones marcadas como fallidas (el ojito) siguen en las tablas, en
+  // gris, pero no entran en los gráficos, en el PIM inicial/actual ni en el CSV.
+  const evaluacionesCronologicas = evaluaciones.filter((e) => !e.oculta).reverse()
   // Las sesiones sin fecha no se pueden ubicar en la evolución (sí aparecen en la tabla).
-  const entrenamientosCronologicos = entrenamientos.filter(fmtEntrenamiento.conFecha).reverse()
+  const entrenamientosCronologicos = entrenamientos
+    .filter((e) => !e.oculta)
+    .filter(fmtEntrenamiento.conFecha)
+    .reverse()
+  const hayEvaluacionesOcultas = evaluaciones.some((e) => e.oculta)
+  const hayEntrenamientosOcultos = entrenamientos.some((e) => e.oculta)
   const seriesEvaluaciones = seriesDeEvaluaciones(evaluacionesCronologicas)
   const seriesEntrenamiento = seriesDeEntrenamientos(entrenamientosCronologicos)
 
   const notasPaciente = useAnotaciones(Number(paciente.id))
   const [generandoInforme, setGenerandoInforme] = useState(false)
   const [errorExportacion, setErrorExportacion] = useState<string | null>(null)
+  const [errorOcultar, setErrorOcultar] = useState<string | null>(null)
 
   // Cambiar de pestaña o de paciente descarta el error de la exportación anterior.
   useEffect(() => {
     setErrorExportacion(null)
+    setErrorOcultar(null)
   }, [tab, paciente.id])
+
+  /**
+   * El ojito de cada fila: marca (o desmarca) esas mediciones como fallidas.
+   * Se ve al toque y, si el servidor no lo guarda, vuelve como estaba.
+   */
+  async function cambiarOculta(tipo: 'evaluacion' | 'entrenamiento', ids: number[], oculta: boolean) {
+    if (!token || ids.length === 0) return
+    setErrorOcultar(null)
+    const cuales = new Set(ids)
+    const aplicar = (valor: boolean) => {
+      if (tipo === 'evaluacion') {
+        setEvaluaciones((actuales) => actuales.map((e) => (cuales.has(e.id_evaluacion) ? { ...e, oculta: valor } : e)))
+      } else {
+        setEntrenamientos((actuales) => actuales.map((e) => (cuales.has(e.id_entrenamiento) ? { ...e, oculta: valor } : e)))
+      }
+    }
+    aplicar(oculta)
+    try {
+      await api.medico.ocultarMediciones(token, Number(paciente.id), tipo, ids, oculta)
+    } catch (err) {
+      aplicar(!oculta)
+      setErrorOcultar(err instanceof ApiError ? err.message : 'No se pudo guardar el cambio. Probá de nuevo.')
+    }
+  }
 
   /** Un solo CSV con los puntos de todos los gráficos de evolución de la pestaña abierta. */
   async function descargarCsv() {
@@ -340,6 +373,7 @@ export function PatientDetail({ paciente, onDesvincular }: PatientDetailProps) {
         )}
       </div>
       {errorExportacion && <div className="auth-alert error">{errorExportacion}</div>}
+      {errorOcultar && <div className="auth-alert error">{errorOcultar}</div>}
 
       {tab === 'evaluaciones' && (
         <div role="tabpanel">
@@ -349,13 +383,17 @@ export function PatientDetail({ paciente, onDesvincular }: PatientDetailProps) {
             <p className="empty-state">{errorEvaluaciones}</p>
           ) : (
             <>
-              {ultimaEvaluacion ? (
+              {evaluacionesCronologicas.length > 0 ? (
                 <TrendChartCarousel
                   series={seriesEvaluaciones}
                   anotacionesDe={(serie) => (serie.clave ? notasPaciente.paraGrafico(serie.clave) : undefined)}
                 />
               ) : (
-                <p className="empty-state">Todavía no hay evaluaciones registradas.</p>
+                <p className="empty-state">
+                  {hayEvaluacionesOcultas
+                    ? 'Todas las evaluaciones están ocultas, así que no hay nada para graficar.'
+                    : 'Todavía no hay evaluaciones registradas.'}
+                </p>
               )}
 
               {evaluaciones.length > 0 && (
@@ -363,6 +401,9 @@ export function PatientDetail({ paciente, onDesvincular }: PatientDetailProps) {
                   <table>
                     <thead>
                       <tr>
+                        <th className="celda-ojo">
+                          <span className="sr-only">En gráficos e informe</span>
+                        </th>
                         <th>Fecha</th>
                         <th>FVC (L)</th>
                         <th>FEV1 (L)</th>
@@ -374,45 +415,59 @@ export function PatientDetail({ paciente, onDesvincular }: PatientDetailProps) {
                       </tr>
                     </thead>
                     <tbody>
-                      {sesiones.map((sesion) => (
-                        <tr key={sesion.fecha_hora}>
-                          <td>{formatearFecha(sesion.fecha_hora)}</td>
-                          <td>{sesion.espirometria?.fvc ?? '—'}</td>
-                          <td>{sesion.espirometria?.fev1 ?? '—'}</td>
-                          <td>{sesion.espirometria?.pef ?? '—'}</td>
-                          <td>{sesion.espirometria?.fivc ?? '—'}</td>
-                          <td>{sesion.espirometria?.fiv1 ?? '—'}</td>
-                          <td>{sesion.pim?.pim ?? '—'}</td>
-                          <td>
-                            <div className="table-actions">
-                              {sesion.espirometria && (
-                                <button
-                                  className="btn btn-outline btn-sm"
-                                  onClick={() =>
-                                    navigate(`/medico/pacientes/${paciente.id}/evaluaciones/${sesion.espirometria!.id_evaluacion}`)
-                                  }
-                                >
-                                  {sesion.pim ? 'Espirometría' : 'Inspeccionar'}
-                                </button>
-                              )}
-                              {sesion.pim && (
-                                <button
-                                  className="btn btn-outline btn-sm"
-                                  onClick={() =>
-                                    navigate(`/medico/pacientes/${paciente.id}/evaluaciones/${sesion.pim!.id_evaluacion}`)
-                                  }
-                                >
-                                  {sesion.espirometria ? 'PIM' : 'Inspeccionar'}
-                                </button>
-                              )}
-                            </div>
-                          </td>
-                        </tr>
-                      ))}
+                      {sesiones.map((sesion) => {
+                        const deLaSesion = [sesion.espirometria, sesion.pim].filter((e): e is Evaluacion => e != null)
+                        const oculta = deLaSesion.every((e) => e.oculta)
+                        return (
+                          <tr key={sesion.fecha_hora} className={oculta ? 'fila-oculta' : undefined}>
+                            <td className="celda-ojo">
+                              <BotonOcultar
+                                oculta={oculta}
+                                que="esta evaluación"
+                                onClick={() =>
+                                  cambiarOculta('evaluacion', deLaSesion.map((e) => e.id_evaluacion), !oculta)
+                                }
+                              />
+                            </td>
+                            <td>{formatearFecha(sesion.fecha_hora)}</td>
+                            <td>{sesion.espirometria?.fvc ?? '—'}</td>
+                            <td>{sesion.espirometria?.fev1 ?? '—'}</td>
+                            <td>{sesion.espirometria?.pef ?? '—'}</td>
+                            <td>{sesion.espirometria?.fivc ?? '—'}</td>
+                            <td>{sesion.espirometria?.fiv1 ?? '—'}</td>
+                            <td>{sesion.pim?.pim ?? '—'}</td>
+                            <td>
+                              <div className="table-actions">
+                                {sesion.espirometria && (
+                                  <button
+                                    className="btn btn-outline btn-sm"
+                                    onClick={() =>
+                                      navigate(`/medico/pacientes/${paciente.id}/evaluaciones/${sesion.espirometria!.id_evaluacion}`)
+                                    }
+                                  >
+                                    {sesion.pim ? 'Espirometría' : 'Inspeccionar'}
+                                  </button>
+                                )}
+                                {sesion.pim && (
+                                  <button
+                                    className="btn btn-outline btn-sm"
+                                    onClick={() =>
+                                      navigate(`/medico/pacientes/${paciente.id}/evaluaciones/${sesion.pim!.id_evaluacion}`)
+                                    }
+                                  >
+                                    {sesion.espirometria ? 'PIM' : 'Inspeccionar'}
+                                  </button>
+                                )}
+                              </div>
+                            </td>
+                          </tr>
+                        )
+                      })}
                     </tbody>
                   </table>
                 </div>
               )}
+              {hayEvaluacionesOcultas && <NotaOcultas />}
             </>
           )}
         </div>
@@ -432,7 +487,11 @@ export function PatientDetail({ paciente, onDesvincular }: PatientDetailProps) {
                   anotacionesDe={(serie) => (serie.clave ? notasPaciente.paraGrafico(serie.clave) : undefined)}
                 />
               ) : (
-                <p className="empty-state">Todavía no hay sesiones de entrenamiento registradas.</p>
+                <p className="empty-state">
+                  {hayEntrenamientosOcultos
+                    ? 'No hay sesiones para graficar: las ocultas no entran en los gráficos.'
+                    : 'Todavía no hay sesiones de entrenamiento registradas.'}
+                </p>
               )}
 
               {entrenamientosCronologicos.length > 0 && <ResistenciaFranja entrenamientos={entrenamientosCronologicos} />}
@@ -442,6 +501,9 @@ export function PatientDetail({ paciente, onDesvincular }: PatientDetailProps) {
                   <table>
                     <thead>
                       <tr>
+                        <th className="celda-ojo">
+                          <span className="sr-only">En gráficos e informe</span>
+                        </th>
                         <th>Fecha</th>
                         <th>Estado</th>
                         <th>Ciclos</th>
@@ -453,7 +515,14 @@ export function PatientDetail({ paciente, onDesvincular }: PatientDetailProps) {
                     </thead>
                     <tbody>
                       {entrenamientos.map((e) => (
-                        <tr key={e.id_entrenamiento}>
+                        <tr key={e.id_entrenamiento} className={e.oculta ? 'fila-oculta' : undefined}>
+                          <td className="celda-ojo">
+                            <BotonOcultar
+                              oculta={e.oculta ?? false}
+                              que="esta sesión"
+                              onClick={() => cambiarOculta('entrenamiento', [e.id_entrenamiento], !e.oculta)}
+                            />
+                          </td>
                           <td>{fmtEntrenamiento.fecha(e, false)}</td>
                           <td>
                             <span className={`entrenamiento-estado estado-${e.estado ?? 'desconocido'}`}>
@@ -478,6 +547,7 @@ export function PatientDetail({ paciente, onDesvincular }: PatientDetailProps) {
                   </table>
                 </div>
               )}
+              {hayEntrenamientosOcultos && <NotaOcultas />}
             </>
           )}
         </div>
@@ -552,5 +622,38 @@ export function PatientDetail({ paciente, onDesvincular }: PatientDetailProps) {
         </Modal>
       )}
     </div>
+  )
+}
+
+/**
+ * El ojito de cada fila de las tablas: marca la medición como fallida (ojo
+ * tachado, fila en gris) para que no aparezca en los gráficos de evolución,
+ * en el CSV ni en el informe.
+ */
+function BotonOcultar({ oculta, que, onClick }: { oculta: boolean; que: string; onClick: () => void }) {
+  return (
+    <button
+      type="button"
+      className={`btn-ojo ${oculta ? 'btn-ojo-oculta' : ''}`}
+      onClick={onClick}
+      aria-pressed={oculta}
+      aria-label={`Ocultar ${que} de los gráficos y el informe`}
+      title={
+        oculta
+          ? 'Oculta: no aparece en los gráficos, el CSV ni el informe. Tocá para volver a mostrarla.'
+          : 'Marcar como fallida: deja de aparecer en los gráficos, el CSV y el informe'
+      }
+    >
+      <EyeIcon tachado={oculta} className="icon-16" />
+    </button>
+  )
+}
+
+function NotaOcultas() {
+  return (
+    <p className="nota-ocultas">
+      Las filas en gris están ocultas: no aparecen en los gráficos, el CSV ni el informe. Tocá el ojo para volver a
+      mostrarlas.
+    </p>
   )
 }

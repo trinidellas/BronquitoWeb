@@ -88,9 +88,20 @@ export async function generarInformeGeneral({
   pdf.seccion('Datos del paciente')
   pdf.pares(paresPaciente(paciente))
 
+  // Las mediciones que el médico marcó como fallidas (el ojito de la ficha) no van al informe.
+  const sesionesOcultas = agruparEnSesiones(evaluaciones.filter((e) => e.oculta)).length
+  const entrenamientosOcultos = entrenamientos.filter((e) => e.oculta).length
+
   pdf.seccion('Evaluaciones')
-  const evaluacionesCronologicas = porFecha(evaluaciones)
+  const evaluacionesCronologicas = porFecha(evaluaciones.filter((e) => !e.oculta))
   const sesiones = agruparEnSesiones(evaluacionesCronologicas)
+  if (sesionesOcultas > 0) {
+    pdf.vacio(
+      sesionesOcultas === 1
+        ? 'No se incluye 1 sesión de evaluación marcada como fallida.'
+        : `No se incluyen ${sesionesOcultas} sesiones de evaluación marcadas como fallidas.`,
+    )
+  }
   if (sesiones.length === 0) {
     pdf.vacio('Todavía no hay evaluaciones registradas.')
   } else {
@@ -124,7 +135,14 @@ export async function generarInformeGeneral({
 
   pdf.seccion('Entrenamientos')
   // Las sesiones sin fecha no se pueden ubicar en el tiempo: no van al informe.
-  const entrenamientosCronologicos = porFecha(entrenamientos.filter(conFecha))
+  const entrenamientosCronologicos = porFecha(entrenamientos.filter((e) => !e.oculta).filter(conFecha))
+  if (entrenamientosOcultos > 0) {
+    pdf.vacio(
+      entrenamientosOcultos === 1
+        ? 'No se incluye 1 sesión de entrenamiento marcada como fallida.'
+        : `No se incluyen ${entrenamientosOcultos} sesiones de entrenamiento marcadas como fallidas.`,
+    )
+  }
   if (entrenamientosCronologicos.length === 0) {
     pdf.vacio('Todavía no hay sesiones de entrenamiento registradas.')
   } else {

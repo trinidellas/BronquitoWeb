@@ -33,6 +33,12 @@ class EntrenamientoOut(BaseModel):
     multiciclo: dict[str, float | None] | None
 
 
+class EntrenamientoMedicoOut(EntrenamientoOut):
+    """Lo que ve el médico en la lista: además, si la marcó como fallida (no entra en gráficos ni informe)."""
+
+    oculta: bool = False
+
+
 class EntrenamientoDetalleOut(EntrenamientoOut):
     """La sesión con sus ciclos (null si no se pudo analizar)."""
 

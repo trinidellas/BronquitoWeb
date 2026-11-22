@@ -23,6 +23,12 @@ class EvaluacionOut(BaseModel):
     humedad: float | None
 
 
+class EvaluacionMedicoOut(EvaluacionOut):
+    """Lo que ve el médico: además, si la marcó como fallida (no entra en gráficos ni informe)."""
+
+    oculta: bool = False
+
+
 class EvaluacionMuestraOut(BaseModel):
     """La curva cruda (tiempo/flujo/presión/volumen) de una evaluación puntual."""
 

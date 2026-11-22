@@ -15,13 +15,14 @@ from app.models.evaluacion import Evaluacion, EvaluacionMuestra
 from app.models.frecuencia_recomendada import FrecuenciaRecomendada
 from app.models.medico import Medico
 from app.models.medico_paciente import MedicoPaciente
+from app.models.medicion_oculta import MedicionOculta
 from app.models.paciente import Paciente
 from app.models.rutina import Rutina
 from app.schemas.anotacion import AnotacionCrearRequest, AnotacionEditarRequest, AnotacionOut
-from app.schemas.entrenamiento import EntrenamientoOut
-from app.schemas.evaluacion import EvaluacionMuestraOut, EvaluacionOut
+from app.schemas.entrenamiento import EntrenamientoMedicoOut
+from app.schemas.evaluacion import EvaluacionMedicoOut, EvaluacionMuestraOut
 from app.schemas.frecuencia import FrecuenciaCrearRequest, FrecuenciaOut
-from app.schemas.medico import MedicoPerfilOut, MedicoPerfilUpdate, VincularPacienteRequest
+from app.schemas.medico import MedicoPerfilOut, MedicoPerfilUpdate, OcultarMedicionesRequest, VincularPacienteRequest
 from app.schemas.paciente import PacienteDeMedicoOut
 from app.schemas.rutina import RutinaOut
 
@@ -178,31 +179,103 @@ def desvincular_paciente(
     db.commit()
 
 
-@router.get("/me/pacientes/{id_paciente}/evaluaciones", response_model=list[EvaluacionOut])
+def _ids_ocultos(db: Session, id_paciente: int, tipo: str) -> set[int]:
+    """Las mediciones de ese tipo que algún médico del paciente marcó como fallidas."""
+    filas = (
+        db.query(MedicionOculta.id_medicion)
+        .filter(MedicionOculta.id_paciente == id_paciente, MedicionOculta.tipo == tipo)
+        .all()
+    )
+    return {fila[0] for fila in filas}
+
+
+@router.get("/me/pacientes/{id_paciente}/evaluaciones", response_model=list[EvaluacionMedicoOut])
 def evaluaciones_de_paciente(
     id_paciente: int,
     medico: Medico = Depends(get_current_medico),
     db: Session = Depends(get_db),
 ):
-    """Evaluaciones (espirometría/PIM) de un paciente vinculado a ESTE médico, más recientes primero."""
+    """
+    Evaluaciones (espirometría/PIM) de un paciente vinculado a ESTE médico,
+    más recientes primero. `oculta`: la marcaron como fallida.
+    """
     _exigir_vinculo(medico, id_paciente, db)
-    return (
+    ocultas = _ids_ocultos(db, id_paciente, "evaluacion")
+    evaluaciones = (
         db.query(Evaluacion)
         .filter(Evaluacion.id_paciente == id_paciente)
         .order_by(Evaluacion.fecha_hora.desc())
         .all()
     )
+    salida = []
+    for evaluacion in evaluaciones:
+        fila = EvaluacionMedicoOut.model_validate(evaluacion)
+        fila.oculta = evaluacion.id_evaluacion in ocultas
+        salida.append(fila)
+    return salida
 
 
-@router.get("/me/pacientes/{id_paciente}/entrenamientos", response_model=list[EntrenamientoOut])
+@router.get("/me/pacientes/{id_paciente}/entrenamientos", response_model=list[EntrenamientoMedicoOut])
 def entrenamientos_de_paciente(
     id_paciente: int,
     medico: Medico = Depends(get_current_medico),
     db: Session = Depends(get_db),
 ):
-    """Entrenamientos de un paciente vinculado a ESTE médico, más recientes primero."""
+    """
+    Entrenamientos de un paciente vinculado a ESTE médico, más recientes
+    primero. `oculta`: lo marcaron como fallido.
+    """
     _exigir_vinculo(medico, id_paciente, db)
-    return entrenamientos_dispositivo.listar(db, id_paciente)
+    ocultos = _ids_ocultos(db, id_paciente, "entrenamiento")
+    return [
+        {**sesion, "oculta": sesion["id_entrenamiento"] in ocultos}
+        for sesion in entrenamientos_dispositivo.listar(db, id_paciente)
+    ]
+
+
+@router.put("/me/pacientes/{id_paciente}/mediciones-ocultas", status_code=204)
+def ocultar_mediciones(
+    id_paciente: int,
+    payload: OcultarMedicionesRequest,
+    medico: Medico = Depends(get_current_medico),
+    db: Session = Depends(get_db),
+):
+    """
+    Marca (`oculta: true`) o desmarca mediciones como fallidas. Las marcadas
+    siguen en la ficha, pero no van en los gráficos de evolución, ni en el
+    CSV, ni en el informe. Repetirlo no cambia nada.
+    """
+    _exigir_vinculo(medico, id_paciente, db)
+    ids = set(payload.ids)
+    if payload.tipo == "evaluacion":
+        columna, modelo = Evaluacion.id_evaluacion, Evaluacion
+    else:
+        columna, modelo = Entrenamiento.id_entrenamiento, Entrenamiento
+    del_paciente = {
+        fila[0] for fila in db.query(columna).filter(modelo.id_paciente == id_paciente, columna.in_(ids)).all()
+    }
+    if del_paciente != ids:
+        raise HTTPException(status_code=404, detail="Alguna de esas mediciones no es de este paciente.")
+
+    ya_ocultas = (
+        db.query(MedicionOculta)
+        .filter(MedicionOculta.tipo == payload.tipo, MedicionOculta.id_medicion.in_(ids))
+        .all()
+    )
+    if payload.oculta:
+        faltan = ids - {fila.id_medicion for fila in ya_ocultas}
+        ahora = datetime.now(timezone.utc).replace(tzinfo=None)
+        db.add_all(
+            MedicionOculta(
+                id_paciente=id_paciente, tipo=payload.tipo, id_medicion=id_medicion,
+                id_medico=medico.id_medico, ocultada_en=ahora,
+            )
+            for id_medicion in faltan
+        )
+    else:
+        for fila in ya_ocultas:
+            db.delete(fila)
+    db.commit()
 
 
 @router.get("/me/pacientes/{id_paciente}/rutina", response_model=RutinaOut | None)

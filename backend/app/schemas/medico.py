@@ -1,4 +1,5 @@
 from datetime import date
+from typing import Literal
 
 from pydantic import BaseModel, ConfigDict, EmailStr, Field, field_validator
 
@@ -47,3 +48,15 @@ class VincularPacienteRequest(BaseModel):
     @classmethod
     def nombre_usuario_valido(cls, valor: str) -> str:
         return normalizar_nombre_usuario(valor)
+
+
+class OcultarMedicionesRequest(BaseModel):
+    """
+    Marca (o desmarca) mediciones del paciente como fallidas. Una fila de la
+    tabla de evaluaciones puede ser dos evaluaciones (la espirometría y la
+    PIM de la misma sesión): por eso van varias juntas.
+    """
+
+    tipo: Literal["evaluacion", "entrenamiento"]
+    ids: list[int] = Field(min_length=1, max_length=50)
+    oculta: bool

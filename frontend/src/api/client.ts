@@ -124,6 +124,19 @@ export const api = {
       apiFetch<void>(`/medicos/me/pacientes/${idPaciente}`, { method: 'DELETE', token }),
     evaluacionesDe: (token: string, idPaciente: number) =>
       apiFetch<Evaluacion[]>(`/medicos/me/pacientes/${idPaciente}/evaluaciones`, { token }),
+    /** Marca o desmarca mediciones como fallidas (no van en gráficos, CSV ni informe). */
+    ocultarMediciones: (
+      token: string,
+      idPaciente: number,
+      tipo: 'evaluacion' | 'entrenamiento',
+      ids: number[],
+      oculta: boolean,
+    ) =>
+      apiFetch<void>(`/medicos/me/pacientes/${idPaciente}/mediciones-ocultas`, {
+        method: 'PUT',
+        body: { tipo, ids, oculta },
+        token,
+      }),
     entrenamientosDe: (token: string, idPaciente: number) =>
       apiFetch<Entrenamiento[]>(`/medicos/me/pacientes/${idPaciente}/entrenamientos`, { token }),
     entrenamientoDe: (token: string, idPaciente: number, idEntrenamiento: number) =>
