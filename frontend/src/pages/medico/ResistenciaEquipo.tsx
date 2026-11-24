@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+import { useCallback, useEffect, useRef, useState } from 'react'
 import { Modal } from '../../components/ui/Modal'
 import { REPETICIONES_MAX, REPETICIONES_MIN, apiResistencia } from '../../api/resistencia'
 import type { ConfiguracionEquipo, ModoResistencia } from '../../api/resistencia'
@@ -12,6 +12,8 @@ interface TagsEquipoProps {
 const NIVELES = [1, 2, 3, 4, 5]
 /** Lo que se propone en el modal si el médico todavía no fijó ninguna. */
 const REPETICIONES_SUGERIDAS = 30
+/** Cada cuánto se vuelve a preguntar si el equipo ya confirmó, mientras haya algo pendiente. */
+const INTERVALO_REVISAR_MS = 30_000
 
 function textoTagResistencia(config: ConfiguracionEquipo | null): string {
   if (!config) return 'Modo de resistencia: …'
@@ -35,20 +37,58 @@ function textoTagRepeticiones(config: ConfiguracionEquipo | null): string {
 export function TagsEquipo({ token, idPaciente, nombrePaciente }: TagsEquipoProps) {
   const [config, setConfig] = useState<ConfiguracionEquipo | null>(null)
   const [abierto, setAbierto] = useState<'resistencia' | 'repeticiones' | null>(null)
+  // Sube con cada pedido y con cada cambio guardado: así una respuesta que
+  // llega tarde no pisa algo más nuevo (ej. lo que se acaba de guardar).
+  const versionRef = useRef(0)
 
+  const cargar = useCallback(
+    (primeraVez: boolean) => {
+      const esta = ++versionRef.current
+      apiResistencia
+        .ver(token, idPaciente)
+        .then((c) => {
+          if (esta === versionRef.current) setConfig(c)
+        })
+        .catch(() => {
+          // Si falla al recargar, se queda lo último que se vio.
+          if (primeraVez && esta === versionRef.current) setConfig(null)
+        })
+    },
+    [token, idPaciente],
+  )
+
+  // Al cambiar de paciente, el pedido nuevo sube la versión: lo que llegue
+  // tarde del paciente anterior se descarta.
   useEffect(() => {
-    let vigente = true
-    apiResistencia
-      .ver(token, idPaciente)
-      .then((c) => vigente && setConfig(c))
-      .catch(() => vigente && setConfig(null))
-    return () => {
-      vigente = false
-    }
-  }, [token, idPaciente])
+    cargar(true)
+  }, [cargar])
+
+  /** Lo que devuelve el servidor al guardar en un modal. */
+  const cambio = useCallback((nueva: ConfiguracionEquipo) => {
+    versionRef.current++
+    setConfig(nueva)
+  }, [])
 
   const resistenciaPendiente = config?.resistencia != null && config.resistencia.confirmada_en == null
   const repeticionesPendientes = config?.repeticiones != null && config.repeticiones.confirmada_en == null
+  const hayPendiente = resistenciaPendiente || repeticionesPendientes
+
+  // El equipo confirma cuando sincroniza, que puede ser con la ficha abierta:
+  // se vuelve a preguntar al volver a la pestaña y, mientras haya algo
+  // pendiente, cada INTERVALO_REVISAR_MS. Así el punto amarillo se va solo.
+  useEffect(() => {
+    const alVolver = () => {
+      if (document.visibilityState === 'visible') cargar(false)
+    }
+    window.addEventListener('focus', alVolver)
+    document.addEventListener('visibilitychange', alVolver)
+    const intervalo = hayPendiente ? window.setInterval(() => cargar(false), INTERVALO_REVISAR_MS) : undefined
+    return () => {
+      window.removeEventListener('focus', alVolver)
+      document.removeEventListener('visibilitychange', alVolver)
+      if (intervalo !== undefined) window.clearInterval(intervalo)
+    }
+  }, [cargar, hayPendiente])
 
   return (
     <>
@@ -74,7 +114,7 @@ export function TagsEquipo({ token, idPaciente, nombrePaciente }: TagsEquipoProp
           idPaciente={idPaciente}
           nombrePaciente={nombrePaciente}
           configInicial={config}
-          onCambio={setConfig}
+          onCambio={cambio}
           onClose={() => setAbierto(null)}
         />
       )}
@@ -84,7 +124,7 @@ export function TagsEquipo({ token, idPaciente, nombrePaciente }: TagsEquipoProp
           idPaciente={idPaciente}
           nombrePaciente={nombrePaciente}
           configInicial={config}
-          onCambio={setConfig}
+          onCambio={cambio}
           onClose={() => setAbierto(null)}
         />
       )}
