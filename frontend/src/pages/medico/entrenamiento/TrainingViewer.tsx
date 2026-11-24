@@ -5,6 +5,15 @@ import { useSession } from '../../../auth/session'
 import type { FranjaXY, MarcaXY } from '../../../components/ui/SignalXYChart'
 import { SignalXYChart } from '../../../components/ui/SignalXYChart'
 import { CursorContext, indiceMasCercano, useCursorNuevo } from '../../../components/ui/cursorSincronizado'
+import { describirPuntoXY, marcadoresDe } from '../../../anotaciones/notas'
+import {
+  claveComentariosEntrenamiento,
+  claveGraficoEntrenamiento,
+  comentariosDeEntrenamiento,
+  useAnotaciones,
+} from '../../../anotaciones/useAnotaciones'
+import { NotasSesionPanel } from '../NotasSesionPanel'
+import type { PuntoAnotado } from '../NotasSesionPanel'
 import * as f from './formato'
 
 interface TrainingViewerProps {
@@ -142,17 +151,30 @@ function marcasFlujo(
 /** El tramo [desde, hasta] de una señal, con todos sus puntos (para acercarse a un ciclo). */
 function tramo(
   tiempo: number[], valores: (number | null)[], desde: number, hasta: number,
-): { x: number[]; y: (number | null)[] } {
+): { x: number[]; y: (number | null)[]; indices: number[] } {
   const x: number[] = []
   const y: (number | null)[] = []
+  const indices: number[] = []
   for (let i = 0; i < tiempo.length; i++) {
     if (tiempo[i] >= desde && tiempo[i] <= hasta) {
       x.push(tiempo[i])
       y.push(valores[i])
+      indices.push(i)
     }
   }
-  return { x, y }
+  return { x, y, indices }
 }
+
+/** Las muestras (índice en la señal) que tienen alguna nota. */
+function muestrasConNotas(notas: { punto: string | null }[]): Set<number> {
+  return new Set(notas.flatMap((a) => (a.punto != null && /^\d+$/.test(a.punto) ? [Number(a.punto)] : [])))
+}
+
+/** Los dos gráficos de la señal: su id (parte de la clave de las notas: no cambiarlo) y cómo se ven. */
+const GRAFICO_PRESION = { id: 'presion-tiempo', titulo: 'Presión en función del tiempo', color: COLOR_PRESION }
+const GRAFICO_FLUJO = { id: 'flujo-tiempo', titulo: 'Flujo en función del tiempo', color: COLOR_FLUJO }
+const ETIQUETA_TIEMPO = 'Tiempo (s)'
+const ETIQUETA_PRESION = 'Presión (cmH₂O)'
 
 interface Metrica {
   etiqueta: string
@@ -191,6 +213,11 @@ export function TrainingViewer({ idPaciente, idEntrenamiento, onVolver, onAnteri
   /** Con un ciclo elegido: acercar los gráficos a ese ciclo. */
   const [acercar, setAcercar] = useState(true)
   const cursor = useCursorNuevo()
+  const notasPaciente = useAnotaciones(idPaciente)
+  /** El punto al que se fue desde el panel de notas (abre su burbuja). */
+  const [enfoque, setEnfoque] = useState<{ grafico: string; punto: string } | null>(null)
+  const clavePresion = claveGraficoEntrenamiento(idEntrenamiento, GRAFICO_PRESION.id)
+  const claveFlujo = claveGraficoEntrenamiento(idEntrenamiento, GRAFICO_FLUJO.id)
 
   useEffect(() => {
     if (!token) return
@@ -199,6 +226,7 @@ export function TrainingViewer({ idPaciente, idEntrenamiento, onVolver, onAnteri
     setError(null)
     setSenal(null)
     setElegido(null)
+    setEnfoque(null)
     api.medico
       .entrenamientoDe(token, idPaciente, idEntrenamiento)
       .then(async (detalle) => {
@@ -263,8 +291,22 @@ export function TrainingViewer({ idPaciente, idEntrenamiento, onVolver, onAnteri
       ? [cicloElegido.t_inicio_s - MARGEN_CICLO_S, cicloElegido.t_fin_s + MARGEN_CICLO_S]
       : null
 
+  // Las notas de cada gráfico, y qué muestras tienen alguna (así no se
+  // pierden al reducir la señal para dibujar la sesión entera).
+  const notasPresion = useMemo(
+    () => notasPaciente.anotaciones.filter((a) => a.grafico === clavePresion),
+    [notasPaciente.anotaciones, clavePresion],
+  )
+  const notasFlujo = useMemo(
+    () => notasPaciente.anotaciones.filter((a) => a.grafico === claveFlujo),
+    [notasPaciente.anotaciones, claveFlujo],
+  )
+  const forzarPresion = useMemo(() => muestrasConNotas(notasPresion), [notasPresion])
+  const forzarFlujo = useMemo(() => muestrasConNotas(notasFlujo), [notasFlujo])
+
   // Lo que se grafica: el tramo del ciclo con todos sus puntos, o la sesión
-  // entera reducida (mínimo y máximo por ventana, sin perder los picos).
+  // entera reducida (mínimo y máximo por ventana, sin perder los picos ni las
+  // muestras con notas). `indices` es la muestra de la señal de cada punto.
   const graficos = useMemo(() => {
     if (!completa) return null
     if (ventana) {
@@ -274,11 +316,59 @@ export function TrainingViewer({ idPaciente, idEntrenamiento, onVolver, onAnteri
       }
     }
     return {
-      presion: f.reducirSerie(completa.tiempo, completa.presion),
-      flujo: f.reducirSerie(completa.tiempo, completa.flujo),
+      presion: f.reducirSerie(completa.tiempo, completa.presion, undefined, forzarPresion),
+      flujo: f.reducirSerie(completa.tiempo, completa.flujo, undefined, forzarFlujo),
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [completa, ventana?.[0], ventana?.[1]])
+  }, [completa, ventana?.[0], ventana?.[1], forzarPresion, forzarFlujo])
+
+  // Los puntos con notas de los dos gráficos, para listarlos en el panel.
+  const puntosAnotados: PuntoAnotado[] = completa
+    ? [
+        { def: GRAFICO_PRESION, clave: clavePresion, notas: notasPresion, y: completa.presion, etiquetaY: ETIQUETA_PRESION },
+        {
+          def: GRAFICO_FLUJO,
+          clave: claveFlujo,
+          notas: notasFlujo,
+          y: completa.flujo,
+          etiquetaY: completa.procesado ? 'Flujo procesado (L/min)' : 'Flujo crudo (L/min)',
+        },
+      ].flatMap((g) =>
+        marcadoresDe(
+          completa.tiempo.map((_, i) => String(i)),
+          g.notas,
+        ).map((m) => {
+          const valor = g.y[m.indice]
+          const { principal, secundario } = describirPuntoXY(ETIQUETA_TIEMPO, g.etiquetaY, completa.tiempo[m.indice], valor ?? 0)
+          return {
+            grafico: g.clave,
+            punto: m.punto,
+            numero: m.numero,
+            tituloGrafico: g.def.titulo,
+            color: g.def.color,
+            descripcion: `${principal} · ${secundario}`,
+            notas: m.notas,
+          }
+        }),
+      )
+    : []
+
+  /**
+   * Desde el panel: abre la burbuja de ese punto. Si está fuera del ciclo que
+   * se está mirando de cerca, pasa al ciclo de ese momento (o a toda la sesión).
+   */
+  function irAPunto(grafico: string, punto: string) {
+    const t = completa?.tiempo[Number(punto)]
+    if (t != null && acercar && elegido != null) {
+      const actual = ciclos[elegido]
+      const adentro = actual?.t_inicio_s != null && actual.t_fin_s != null && t >= actual.t_inicio_s - MARGEN_CICLO_S && t <= actual.t_fin_s + MARGEN_CICLO_S
+      if (!adentro) {
+        const i = ciclos.findIndex((c) => c.t_inicio_s != null && c.t_fin_s != null && t >= c.t_inicio_s && t <= c.t_fin_s)
+        setElegido(i >= 0 ? i : null)
+      }
+    }
+    setEnfoque({ grafico, punto })
+  }
 
   const franjas = useMemo(() => franjasDe(ciclos, elegido), [ciclos, elegido])
   const marcasP = useMemo(
@@ -488,13 +578,13 @@ export function TrainingViewer({ idPaciente, idEntrenamiento, onVolver, onAnteri
             )}
           </div>
           <p className="ent-ayuda">
-            Tocá un ciclo en los gráficos o en la tabla para ver sus valores. Con ← y → pasás de ciclo; Esc vuelve a
-            toda la sesión.
+            Tocá un ciclo en los gráficos o en la tabla para ver sus valores; tocando un punto también le podés dejar
+            una nota. Con ← y → pasás de ciclo; Esc vuelve a toda la sesión.
           </p>
         </div>
       )}
 
-      <div className={`ent-senales ${c ? 'con-ciclo' : ''}`}>
+      <div className="ent-senales">
         <div className="ent-graficos-apilados">
           {!graficos ? (
             <div className="auth-alert info">Señal no disponible: el equipo no mandó la señal de esta sesión.</div>
@@ -504,15 +594,19 @@ export function TrainingViewer({ idPaciente, idEntrenamiento, onVolver, onAnteri
                 x={graficos.presion.x}
                 y={graficos.presion.y}
                 tiempos={graficos.presion.x}
-                etiquetaX="Tiempo (s)"
-                etiquetaY="Presión (cmH₂O)"
-                caption="Presión en función del tiempo"
-                color={COLOR_PRESION}
+                etiquetaX={ETIQUETA_TIEMPO}
+                etiquetaY={ETIQUETA_PRESION}
+                caption={GRAFICO_PRESION.titulo}
+                color={GRAFICO_PRESION.color}
                 franjas={franjas}
                 marcas={marcasP}
                 ancho={ANCHO_GRAFICO}
                 alto={ALTO_GRAFICO}
                 onClickPunto={(i) => elegirEnTiempo(graficos.presion.x[i])}
+                clavesPuntos={graficos.presion.indices.map(String)}
+                anotaciones={notasPaciente.paraGrafico(clavePresion, {
+                  enfocar: enfoque?.grafico === clavePresion ? enfoque : null,
+                })}
               />
               <SignalXYChart
                 x={graficos.flujo.x}
@@ -527,6 +621,10 @@ export function TrainingViewer({ idPaciente, idEntrenamiento, onVolver, onAnteri
                 ancho={ANCHO_GRAFICO}
                 alto={ALTO_GRAFICO}
                 onClickPunto={(i) => elegirEnTiempo(graficos.flujo.x[i])}
+                clavesPuntos={graficos.flujo.indices.map(String)}
+                anotaciones={notasPaciente.paraGrafico(claveFlujo, {
+                  enfocar: enfoque?.grafico === claveFlujo ? enfoque : null,
+                })}
               />
               {ciclos.length > 0 && (
                 <p className="ent-leyenda">
@@ -542,13 +640,27 @@ export function TrainingViewer({ idPaciente, idEntrenamiento, onVolver, onAnteri
           )}
         </div>
 
-        {c && (
-          <GrupoMetricas
-            className="ent-ciclo-elegido"
-            titulo={`Ciclo ${c.numero ?? (elegido ?? 0) + 1} de ${ciclos.length}`}
-            metricas={metricasCiclo}
+        {/* A la derecha: el ciclo elegido (si hay) y las notas de la sesión. */}
+        <div className="ent-columna-derecha">
+          {c && (
+            <GrupoMetricas
+              className="ent-ciclo-elegido"
+              titulo={`Ciclo ${c.numero ?? (elegido ?? 0) + 1} de ${ciclos.length}`}
+              metricas={metricasCiclo}
+            />
+          )}
+          <NotasSesionPanel
+            comentarios={comentariosDeEntrenamiento(notasPaciente.anotaciones, idEntrenamiento)}
+            puntosAnotados={puntosAnotados}
+            idMedicoActual={notasPaciente.idMedicoActual}
+            error={notasPaciente.error}
+            ayudaComentarios="Valen para toda la sesión de entrenamiento, no para un punto en particular."
+            onComentar={(texto) => notasPaciente.crear({ texto, grafico: claveComentariosEntrenamiento(idEntrenamiento) })}
+            onEditar={notasPaciente.editar}
+            onBorrar={notasPaciente.borrar}
+            onIrAPunto={irAPunto}
           />
-        )}
+        </div>
       </div>
 
       {ciclos.length > 0 && (

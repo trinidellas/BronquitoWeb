@@ -2052,8 +2052,28 @@ button.cal-ribbon {
   align-items: start;
 }
 
+/*
+ * Las opciones van adentro de un .field, y `.field label` / `.field input`
+ * (pensados para los campos de texto) les ganaban a .field-check: la opción
+ * quedaba en bloque, en negrita y con la casilla fuera de línea con el texto.
+ * Acá se vuelve a lo mismo que "Soy fumador/a." (casilla y texto centrados).
+ */
 .enfermedades-options .field-check {
+  display: flex;
+  align-items: center;
+  gap: 9px;
   margin: 0 0 10px;
+  font-size: 13px;
+  font-weight: 400;
+  line-height: 1.3;
+  color: var(--ink-soft);
+}
+
+.enfermedades-options .field-check input {
+  all: revert; /* la casilla del navegador, sin el borde, fondo ni padding de los campos de texto */
+  width: 16px;
+  height: 16px;
+  flex-shrink: 0;
 }
 
 .settings-card {
@@ -2610,13 +2630,22 @@ button.cal-ribbon {
 
 .ent-senales {
   display: grid;
-  grid-template-columns: 1fr;
+  grid-template-columns: minmax(0, 1fr) 300px;
   gap: 14px;
   align-items: start;
 }
 
-.ent-senales.con-ciclo {
-  grid-template-columns: minmax(0, 1fr) 300px;
+/* Al costado de los gráficos: el ciclo elegido y, debajo, las notas de la sesión. */
+.ent-columna-derecha {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  min-width: 0;
+}
+
+.ent-columna-derecha .notas-panel {
+  width: auto;
+  max-height: 560px;
 }
 
 .ent-graficos-apilados {
@@ -2638,8 +2667,7 @@ button.cal-ribbon {
 }
 
 .ent-ciclo-elegido {
-  position: sticky;
-  top: 12px;
+  position: static;
 }
 
 .ent-fila-ciclo {
@@ -2656,7 +2684,7 @@ button.cal-ribbon {
 }
 
 @media (max-width: 900px) {
-  .ent-senales.con-ciclo {
+  .ent-senales {
     grid-template-columns: 1fr;
   }
 

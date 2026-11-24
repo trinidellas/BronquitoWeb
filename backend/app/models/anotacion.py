@@ -17,10 +17,13 @@ class Anotacion(Base):
     - Nota en un punto: `grafico` dice en qué gráfico está (ej.
       "evaluacion/12/flujo-tiempo") y `punto` qué punto de ese gráfico (ej.
       el índice de la muestra).
-    - Comentario general de una sesión: `grafico` y `punto` en NULL.
+    - Comentario general de una sesión de consultorio: `grafico` y `punto` en
+      NULL, y `sesion` con su `fecha_hora` (espirometría + PIM).
+    - Comentario general de una sesión de entrenamiento: `grafico` con su
+      clave (ej. "entrenamiento/31") y `punto` en NULL.
 
-    `sesion` es el `fecha_hora` de la sesión de consultorio (espirometría +
-    PIM) a la que pertenece la nota, si pertenece a una.
+    `sesion` es el `fecha_hora` de la sesión de consultorio a la que
+    pertenece la nota, si pertenece a una.
 
     La nota es del paciente, no del médico: la ven todos los médicos
     vinculados, pero sólo quien la escribió (`id_medico`) la puede editar o

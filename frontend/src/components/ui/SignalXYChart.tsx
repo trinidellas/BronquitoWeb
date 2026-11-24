@@ -11,8 +11,14 @@ interface SignalXYChartProps {
   etiquetaY: string
   caption?: string
   color?: string
-  /** Si está, se pueden marcar muestras con notas (la clave de cada punto es su índice). */
+  /** Si está, se pueden marcar muestras con notas (la clave de cada punto es su índice, o `clavesPuntos`). */
   anotaciones?: AnotacionesGrafico
+  /**
+   * Clave estable de cada punto, mismo orden y largo que `x`/`y`. Hace falta
+   * si lo que se dibuja es un tramo o una versión reducida de la señal: así
+   * una nota sigue en su muestra aunque cambie lo que se ve.
+   */
+  clavesPuntos?: string[]
   /** Franjas verticales sombreadas (ej. la inspiración y la espiración de cada ciclo), en unidades de X. */
   franjas?: FranjaXY[]
   /** Puntos destacados (ej. la PIM y la PEM de cada ciclo), en unidades de X e Y. */
@@ -55,6 +61,7 @@ export function SignalXYChart({
   caption,
   color = '#2FA7A0',
   anotaciones,
+  clavesPuntos,
   franjas = [],
   marcas = [],
   tiempos,
@@ -123,7 +130,7 @@ export function SignalXYChart({
       }
       area={{ x: padLeft, y: padTop, ancho: plotW, alto: plotH }}
       posiciones={puntos}
-      claves={validos.map(String)}
+      claves={validos.map((i) => clavesPuntos?.[i] ?? String(i))}
       describirPunto={(k) => describirPuntoXY(etiquetaX, etiquetaY, x[validos[k]], y[validos[k]] as number)}
       color={color}
       anotaciones={anotaciones}

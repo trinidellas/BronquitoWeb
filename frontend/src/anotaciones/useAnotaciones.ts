@@ -11,7 +11,10 @@ import type { AnotacionesGrafico } from '../components/ui/ChartInteractivo'
  *     (el punto es el índice de la muestra).
  *   - Evolución en el tiempo:         "evolucion/<evaluaciones|entrenamientos>/<variable>"
  *     (el punto es el id de la evaluación o del entrenamiento).
- *   - Comentario general de una sesión: sin gráfico ni punto, con `sesion`.
+ *   - Señal de un entrenamiento:      "entrenamiento/<id_entrenamiento>/<grafico>"
+ *     (el punto es el índice de la muestra en el CSV, no en lo que se dibuja).
+ *   - Comentario general de una sesión de consultorio: sin gráfico ni punto, con `sesion`.
+ *   - Comentario general de un entrenamiento: "entrenamiento/<id_entrenamiento>", sin punto.
  */
 
 export function claveGraficoSenal(idEvaluacion: number, idGrafico: string): string {
@@ -22,7 +25,21 @@ export function claveGraficoEvolucion(grupo: 'evaluaciones' | 'entrenamientos', 
   return `evolucion/${grupo}/${variable}`
 }
 
-/** Comentarios generales (no atados a un gráfico) de una sesión. */
+export function claveGraficoEntrenamiento(idEntrenamiento: number, idGrafico: string): string {
+  return `entrenamiento/${idEntrenamiento}/${idGrafico}`
+}
+
+export function claveComentariosEntrenamiento(idEntrenamiento: number): string {
+  return `entrenamiento/${idEntrenamiento}`
+}
+
+/** Comentarios generales (no atados a un punto) de una sesión de entrenamiento. */
+export function comentariosDeEntrenamiento(anotaciones: Anotacion[], idEntrenamiento: number): Anotacion[] {
+  const clave = claveComentariosEntrenamiento(idEntrenamiento)
+  return anotaciones.filter((a) => a.grafico === clave && a.punto == null)
+}
+
+/** Comentarios generales (no atados a un gráfico) de una sesión de consultorio. */
 export function comentariosDeSesion(anotaciones: Anotacion[], sesion: string): Anotacion[] {
   return anotaciones.filter((a) => a.grafico == null && a.sesion === sesion)
 }

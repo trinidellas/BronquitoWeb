@@ -23,6 +23,8 @@ interface NotasSesionPanelProps {
   onBorrar: (idAnotacion: number) => Promise<void>
   /** Abre la burbuja de ese punto en su gráfico. */
   onIrAPunto: (grafico: string, punto: string) => void
+  /** Debajo de "Comentarios de la sesión": a qué se aplican. */
+  ayudaComentarios?: string
   style?: CSSProperties
 }
 
@@ -40,6 +42,7 @@ export function NotasSesionPanel({
   onEditar,
   onBorrar,
   onIrAPunto,
+  ayudaComentarios = 'Valen para toda la sesión (espirometría y PIM), no para un punto en particular.',
   style,
 }: NotasSesionPanelProps) {
   function itemDeNota(nota: Anotacion) {
@@ -60,7 +63,7 @@ export function NotasSesionPanel({
 
       <section className="notas-panel-seccion">
         <h4>Comentarios de la sesión</h4>
-        <p className="notas-panel-ayuda">Valen para toda la sesión (espirometría y PIM), no para un punto en particular.</p>
+        <p className="notas-panel-ayuda">{ayudaComentarios}</p>
         {comentarios.map(itemDeNota)}
         <NotaComposer placeholder="Agregá un comentario sobre la sesión…" etiquetaGuardar="Comentar" onGuardar={onComentar} />
       </section>

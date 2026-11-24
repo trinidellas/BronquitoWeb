@@ -171,24 +171,31 @@ export function conFecha(e: Entrenamiento): e is EntrenamientoConFecha {
  * picos: por cada ventana se queda con el mínimo y el máximo, en el orden en
  * que aparecen. Los huecos (null) se conservan: si una ventana tiene alguno,
  * queda un null en su lugar, así la línea se sigue cortando ahí.
+ *
+ * Las muestras de `forzar` (ej. las que tienen notas) quedan siempre.
+ * `indices` dice de qué muestra de la señal original es cada punto.
  */
 export function reducirSerie(
   x: number[],
   y: (number | null)[],
   maxPuntos = 1600,
-): { x: number[]; y: (number | null)[] } {
+  forzar: ReadonlySet<number> = new Set(),
+): { x: number[]; y: (number | null)[]; indices: number[] } {
   const ventanas = Math.floor(maxPuntos / 2)
-  if (x.length <= maxPuntos || ventanas < 1) return { x, y }
+  if (x.length <= maxPuntos || ventanas < 1) return { x, y, indices: x.map((_, i) => i) }
   const tamano = x.length / ventanas
   const rx: number[] = []
   const ry: (number | null)[] = []
+  const indices: number[] = []
   for (let v = 0; v < ventanas; v++) {
     const desde = Math.floor(v * tamano)
     const hasta = Math.min(Math.floor((v + 1) * tamano), x.length)
     let iMin = -1
     let iMax = -1
     let iHueco = -1
+    const forzados: number[] = []
     for (let i = desde; i < hasta; i++) {
+      if (forzar.has(i)) forzados.push(i)
       const valor = y[i]
       if (valor == null) {
         if (iHueco < 0) iHueco = i
@@ -197,13 +204,14 @@ export function reducirSerie(
       if (iMin < 0 || valor < (y[iMin] as number)) iMin = i
       if (iMax < 0 || valor > (y[iMax] as number)) iMax = i
     }
-    const elegidos = [...new Set([iMin, iMax, iHueco].filter((i) => i >= 0))].sort((a, b) => a - b)
+    const elegidos = [...new Set([iMin, iMax, iHueco, ...forzados].filter((i) => i >= 0))].sort((a, b) => a - b)
     for (const i of elegidos) {
       if (rx.length === 0 || rx[rx.length - 1] !== x[i]) {
         rx.push(x[i])
         ry.push(y[i])
+        indices.push(i)
       }
     }
   }
-  return { x: rx, y: ry }
+  return { x: rx, y: ry, indices }
 }

@@ -1,6 +1,6 @@
 import type { Anotacion, Entrenamiento, Evaluacion, PacientePerfil } from '../../api/types'
 import { describirPuntoEvolucion, formatearFechaHora } from '../../anotaciones/notas'
-import { comentariosDeSesion } from '../../anotaciones/useAnotaciones'
+import { comentariosDeEntrenamiento, comentariosDeSesion } from '../../anotaciones/useAnotaciones'
 import { PimTrendChart } from '../../components/ui/PimTrendChart'
 import type { SerieTendencia } from '../../components/ui/TrendChartCarousel'
 import { graficoAImagen } from '../../exportar/graficoAImagen'
@@ -167,6 +167,16 @@ export async function generarInformeGeneral({
 
     pdf.subseccion('Evolución', ALTO_FILA_GRAFICOS)
     pdf.graficos(await graficosDeEvolucion(seriesDeEntrenamientos(entrenamientosCronologicos), anotaciones))
+
+    pdf.subseccion('Comentarios de los entrenamientos')
+    const entrenamientosComentados = entrenamientosCronologicos
+      .map((e) => ({ entrenamiento: e, comentarios: comentariosDeEntrenamiento(anotaciones, e.id_entrenamiento) }))
+      .filter((e) => e.comentarios.length > 0)
+    if (entrenamientosComentados.length === 0) pdf.vacio('No hay comentarios en ninguna sesión de entrenamiento.')
+    for (const { entrenamiento, comentarios } of entrenamientosComentados) {
+      pdf.texto(`Sesión del ${formatearFechaHora(entrenamiento.fecha_hora)}`, { tamano: 9.5, negrita: true, espacioDespues: 1 })
+      for (const comentario of comentarios) pdf.nota(comentario, 4)
+    }
   }
 
   pdf.pie(`Generado con Bronquito el ${hoyLegible()} por ${medico}`)

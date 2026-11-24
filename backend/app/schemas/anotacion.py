@@ -43,8 +43,10 @@ class AnotacionCrearRequest(BaseModel):
 
     @model_validator(mode="after")
     def _nota_de_punto_o_de_sesion(self):
-        if (self.grafico is None) != (self.punto is None):
-            raise ValueError("Una nota en un gráfico necesita el gráfico y el punto.")
+        # Con `grafico` y sin `punto`: comentario general de lo que dice la
+        # clave (ej. "entrenamiento/31", una sesión de entrenamiento).
+        if self.punto is not None and self.grafico is None:
+            raise ValueError("Una nota en un punto necesita el gráfico.")
         if self.grafico is None and self.sesion is None:
             raise ValueError("Un comentario general tiene que ser de una sesión.")
         return self
