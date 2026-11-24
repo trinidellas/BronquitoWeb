@@ -5,9 +5,15 @@ import type { Entrenamiento, EntrenamientoConFecha } from '../../../api/types'
  * (lista, visor, evolución, PDF) pasan por acá, así las convenciones son las
  * mismas en todos lados:
  *   - Un número en null ("no se pudo calcular") se muestra "--", nunca 0.
- *   - PIM y PEM con la convención clínica: el equipo manda la PIM positiva y
- *     la PEM negativa; se muestran -pim (negativa) y -pem (positiva).
- *   - La caída de la PIM y su pendiente se muestran como vienen.
+ *   - Signos: el equipo manda la inspiración en negativo (presión y flujo).
+ *     Las sesiones de antes traían la presión y la PIM positivas al
+ *     inspirar. Para que se vea igual venga como venga:
+ *       - PIM siempre negativa y PEM siempre positiva (convención clínica);
+ *       - PIF y PEF como magnitud (positivos);
+ *       - la curva de presión se da vuelta si la sesión la trae positiva al
+ *         inspirar (ver `presionPositivaAlInspirar`).
+ *   - La caída de la PIM se muestra como viene (> 0 = cayó); su pendiente,
+ *     en la misma convención que la PIM que se muestra.
  */
 
 export const SIN_DATO = '--'
@@ -19,14 +25,83 @@ export function num(valor: number | null | undefined, decimales = 1, unidad?: st
   return unidad ? `${texto} ${unidad}` : texto
 }
 
-/** PIM con la convención clínica (negativa). */
+/** PIM con la convención clínica (negativa), venga con el signo que venga del equipo. */
 export function pimClinica(valor: number | null | undefined): number | null {
-  return valor == null ? null : -valor
+  // `0 -` y no `-`: así un 0 no se muestra "-0".
+  return valor == null ? null : 0 - Math.abs(valor)
 }
 
-/** PEM con la convención clínica (positiva). */
+/** PEM con la convención clínica (positiva), venga con el signo que venga del equipo. */
 export function pemClinica(valor: number | null | undefined): number | null {
-  return valor == null ? null : -valor
+  return valor == null ? null : Math.abs(valor)
+}
+
+/** PIF y PEF como magnitud (positivos), vengan con el signo que vengan del equipo. */
+export function picoFlujo(valor: number | null | undefined): number | null {
+  return valor == null ? null : Math.abs(valor)
+}
+
+/**
+ * La pendiente de la PIM (cmH₂O por ciclo) en la misma convención que la
+ * PIM que se muestra (negativa). El equipo la calcula sobre la PIM con su
+ * propio signo: si mandó la PIM positiva (formato viejo), va al revés.
+ */
+export function pendientePimClinica(
+  pendiente: number | null | undefined,
+  pimDelEquipo: number | null | undefined,
+): number | null {
+  if (pendiente == null) return null
+  return pimDelEquipo != null && pimDelEquipo > 0 ? 0 - pendiente : pendiente
+}
+
+function masCercano(tiempo: number[], t: number): number {
+  let izquierda = 0
+  let derecha = tiempo.length - 1
+  while (izquierda < derecha) {
+    const medio = (izquierda + derecha) >> 1
+    if (tiempo[medio] < t) izquierda = medio + 1
+    else derecha = medio
+  }
+  return izquierda > 0 && Math.abs(tiempo[izquierda - 1] - t) <= Math.abs(tiempo[izquierda] - t) ? izquierda - 1 : izquierda
+}
+
+/**
+ * Si la presión de la señal viene positiva al inspirar (formato viejo). El
+ * equipo nuevo la manda negativa al inspirar, como el flujo. Se decide con
+ * la misma sesión, así no depende de la versión del equipo:
+ *   1. Con el signo de la presión en el momento de la PIM de cada ciclo
+ *      (`momentosPim`, en segundos desde el inicio, como `tiempo`): gana la mayoría.
+ *   2. Sin ciclos, comparándola con el flujo procesado (negativo al
+ *      inspirar): si van al revés, la presión viene positiva al inspirar.
+ *   3. Si no hay con qué decidir, se asume el formato nuevo.
+ */
+export function presionPositivaAlInspirar(
+  tiempo: number[],
+  presion: (number | null)[],
+  momentosPim: number[],
+  flujoProcesado: (number | null)[] | null,
+): boolean {
+  if (tiempo.length === 0) return false
+  let positivas = 0
+  let negativas = 0
+  for (const t of momentosPim) {
+    const valor = presion[masCercano(tiempo, t)]
+    if (valor == null || valor === 0) continue
+    if (valor > 0) positivas++
+    else negativas++
+  }
+  if (positivas !== negativas) return positivas > negativas
+
+  if (flujoProcesado) {
+    let producto = 0
+    for (let i = 0; i < presion.length; i++) {
+      const p = presion[i]
+      const q = flujoProcesado[i]
+      if (p != null && q != null) producto += p * q
+    }
+    if (producto !== 0) return producto < 0
+  }
+  return false
 }
 
 /** 83.4 -> "1:23". */

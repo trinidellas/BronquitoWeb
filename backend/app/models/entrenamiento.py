@@ -12,8 +12,9 @@ Cuatro tablas, sin datos anidados:
                             no tenga columna. La web no lo lee.
 
 Convenciones de lo guardado (iguales al JSON del equipo, salvo la caída):
-  - PIM positiva y PEM negativa, como las mide la placa. La web las muestra
-    con la convención clínica (-pim, -pem).
+  - PIM, PEM, PIF y PEF con el signo del equipo (el nuevo manda la
+    inspiración en negativo; las sesiones viejas, la PIM positiva). La web
+    las muestra siempre con la convención clínica, vengan como vengan.
   - `caida_pim_pct` YA CORREGIDA: > 0 = la PIM cayó. Los JSON de la versión
     anterior del equipo la traen al revés; se invierte al guardarla.
   - Flujos en L/min, volúmenes en L, tiempos en s (desde el inicio del CSV).

@@ -526,9 +526,13 @@ POST /dispositivo/entrenamientos/csv?usuario=msalerno&archivo=ent_20261114_15300
 
 **El CSV** se lee por nombre de columna (no por posición, sin importar mayúsculas):
 
+- **Signos: la inspiración va en negativo**, en la presión y en el flujo. Las sesiones
+  viejas traían la presión positiva al inspirar: la web lo detecta en cada sesión (con el
+  signo de la presión en el momento de la PIM, o comparándola con el flujo) y la da vuelta
+  al graficar, así que las dos se ven igual.
 - `flujo_proc_lmin`: flujo **procesado** por el equipo (sentido por fase, venturi, BTPS y
   filtro de picos), negativo al inspirar. Es el que grafica la web; en cada ciclo su pico
-  coincide con `-pif_Lmin` / `pef_Lmin` del JSON.
+  coincide con el PIF (para abajo) y el PEF (para arriba) del JSON.
 - Sin esa columna (equipos viejos) o con la columna vacía en todas las filas (sesión sin
   análisis), la web grafica `flujo_lmin` con el aviso "señal cruda, solo ilustrativa".
 - Una celda vacía suelta es un **hueco** (la línea se corta), no un 0.
@@ -549,8 +553,10 @@ POST /dispositivo/entrenamientos/csv?usuario=msalerno&archivo=ent_20261114_15300
   | `entrenamientos_csv` | El CSV tal cual llegó |
   | `entrenamientos_json` | El JSON original (respaldo) |
 
-  Se guarda con los signos del equipo (PIM positiva, PEM negativa), salvo
-  `caida_pim_pct`, que queda siempre con el criterio nuevo (> 0 = cayó).
+  Se guarda con los signos del equipo, salvo `caida_pim_pct`, que queda siempre con el
+  criterio nuevo (> 0 = cayó). La web muestra PIM, PEM, PIF y PEF con la convención
+  clínica (PIM negativa, PEM positiva, PIF y PEF como magnitud) vengan con el signo que
+  vengan, y pone cada punto sobre el pico de la señal.
 - El JSON sin `"id_entrenamiento"` se toma como de la versión anterior del equipo: la
   web le invierte el signo a `caida_pim_pct` al mostrarlo.
 - `sincronizado` se ignora.

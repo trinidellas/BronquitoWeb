@@ -17,8 +17,9 @@ los del JSON (ver los mapeos de abajo).
 Convenciones:
   - `caida_pim_pct` se guarda con el criterio nuevo (> 0 = la PIM cayó). Los
     JSON viejos (sin "id_entrenamiento") la traen al revés: se invierte.
-  - PIM positiva y PEM negativa, como las manda el equipo. La web aplica la
-    convención clínica al mostrarlas.
+  - PIM, PEM, PIF y PEF con el signo que mande el equipo (el nuevo manda la
+    inspiración en negativo). La web las muestra con la convención clínica,
+    vengan con el signo que vengan.
   - Cualquier número que no venga o no sea número queda en NULL.
 """
 

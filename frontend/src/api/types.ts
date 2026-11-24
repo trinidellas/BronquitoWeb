@@ -86,8 +86,9 @@ export interface EvaluacionMuestras {
  * backend/app/core/entrenamientos_dispositivo.py). Cualquier número puede
  * venir en null ("no se pudo calcular"): se muestra "--", nunca 0.
  *
- * Signos: PIM y PEM vienen como las mide la placa (PIM positiva, PEM
- * negativa). En pantalla van con la convención clínica (ver
+ * Signos: PIM, PEM, PIF y PEF vienen con el signo del equipo (el nuevo manda
+ * la inspiración en negativo; las sesiones viejas traían la PIM positiva). En
+ * pantalla van siempre con la convención clínica, vengan como vengan (ver
  * pages/medico/entrenamiento/formato.ts). `multiciclo.caida_pim_pct` ya viene
  * con el criterio nuevo: > 0 = la PIM cayó.
  */
@@ -174,8 +175,9 @@ export interface EntrenamientoDetalle extends Entrenamiento {
 }
 
 /**
- * La señal del CSV, sin tocar signos: presión positiva al inspirar, flujo
- * negativo al inspirar.
+ * La señal del CSV, sin tocar signos: el equipo manda la inspiración en
+ * negativo (presión y flujo). Las sesiones viejas traen la presión positiva
+ * al inspirar: el visor lo detecta y la da vuelta.
  */
 export interface SenalEntrenamiento {
   tiempo_s: number[]

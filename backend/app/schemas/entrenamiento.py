@@ -47,8 +47,10 @@ class EntrenamientoDetalleOut(EntrenamientoOut):
 
 class SenalEntrenamientoOut(BaseModel):
     """
-    La señal del CSV, sin tocar signos (presión positiva y flujo negativo al
-    inspirar). Un null en un flujo es un hueco (celda vacía), no un 0.
+    La señal del CSV, sin tocar signos: el equipo manda la inspiración en
+    negativo (presión y flujo); las sesiones viejas traen la presión positiva
+    al inspirar y la web la da vuelta al graficar. Un null en un flujo es un
+    hueco (celda vacía), no un 0.
       - flujo_proc_lmin: el flujo PROCESADO por el equipo (sentido por fase,
         venturi, BTPS y filtro de picos): el mismo de las métricas del JSON.
         Null si el CSV no lo trae (equipo viejo) o viene vacío (sin análisis).

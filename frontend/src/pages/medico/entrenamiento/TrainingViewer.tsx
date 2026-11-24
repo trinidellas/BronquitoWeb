@@ -48,8 +48,27 @@ function franjasDe(ciclos: CicloEntrenamiento[], elegido: number | null): Franja
   })
 }
 
-/** PIM y PEM de cada ciclo sobre la presión (convención clínica). El ciclo elegido lleva el valor escrito. */
-function marcasPresion(ciclos: CicloEntrenamiento[], elegido: number | null): MarcaXY[] {
+/**
+ * Dónde va el punto de un pico: el valor del JSON (sin su signo) con el signo
+ * que tiene la señal en ese instante. Así queda sobre el pico venga el JSON
+ * con el signo que venga; si la señal no tiene valor ahí, `signoPorDefecto`.
+ */
+function enElPico(
+  valor: number, t: number, tiempo: number[], senal: (number | null)[], signoPorDefecto: 1 | -1,
+): number {
+  const i = indiceMasCercano(tiempo, t)
+  const enSenal = i == null ? null : senal[i]
+  const signo = enSenal != null && enSenal !== 0 ? Math.sign(enSenal) : signoPorDefecto
+  return signo * Math.abs(valor)
+}
+
+/**
+ * PIM y PEM de cada ciclo sobre la presión (ya con la inspiración en
+ * negativo). El ciclo elegido lleva el valor escrito, con la convención clínica.
+ */
+function marcasPresion(
+  ciclos: CicloEntrenamiento[], elegido: number | null, tiempo: number[], presion: (number | null)[],
+): MarcaXY[] {
   return ciclos.flatMap((c, i) => {
     const destacada = i === elegido
     const marcas: MarcaXY[] = []
@@ -57,14 +76,14 @@ function marcasPresion(ciclos: CicloEntrenamiento[], elegido: number | null): Ma
     const pem = f.pemClinica(c.pem_cmH2O)
     if (c.t_pim_s != null && pim != null) {
       marcas.push({
-        x: c.t_pim_s, y: pim, color: MARCA_PIM, destacada,
+        x: c.t_pim_s, y: enElPico(pim, c.t_pim_s, tiempo, presion, -1), color: MARCA_PIM, destacada,
         titulo: `Ciclo ${c.numero ?? '?'} · PIM ${f.num(pim, 1, 'cmH₂O')}`,
         etiqueta: destacada ? `PIM ${f.num(pim, 1)}` : undefined,
       })
     }
     if (c.t_pem_s != null && pem != null) {
       marcas.push({
-        x: c.t_pem_s, y: pem, color: MARCA_PEM, destacada,
+        x: c.t_pem_s, y: enElPico(pem, c.t_pem_s, tiempo, presion, 1), color: MARCA_PEM, destacada,
         titulo: `Ciclo ${c.numero ?? '?'} · PEM ${f.num(pem, 1, 'cmH₂O')}`,
         etiqueta: destacada ? `PEM ${f.num(pem, 1)}` : undefined,
       })
@@ -75,8 +94,8 @@ function marcasPresion(ciclos: CicloEntrenamiento[], elegido: number | null): Ma
 
 /**
  * PIF y PEF de cada ciclo sobre el flujo, en t_pif / t_pef.
- * - Con el flujo procesado, el punto va en -PIF / +PEF del JSON (el equipo
- *   negativo = inspiración): es el pico de esa misma señal.
+ * - Con el flujo procesado, el punto va en el PIF / PEF del JSON, del lado
+ *   del pico de esa misma señal (inspiración en negativo).
  * - Con el flujo crudo, va sobre la señal en ese instante (el crudo no
  *   coincide con el JSON); el valor escrito es siempre el del JSON.
  */
@@ -90,20 +109,30 @@ function marcasFlujo(
   return ciclos.flatMap((c, i) => {
     const destacada = i === elegido
     const marcas: MarcaXY[] = []
-    const yPif = c.t_pif_s == null ? null : procesado && c.pif_Lmin != null ? -c.pif_Lmin : enSenal(c.t_pif_s)
-    const yPef = c.t_pef_s == null ? null : procesado && c.pef_Lmin != null ? c.pef_Lmin : enSenal(c.t_pef_s)
+    const yPif =
+      c.t_pif_s == null
+        ? null
+        : procesado && c.pif_Lmin != null
+          ? enElPico(c.pif_Lmin, c.t_pif_s, tiempo, flujo, -1)
+          : enSenal(c.t_pif_s)
+    const yPef =
+      c.t_pef_s == null
+        ? null
+        : procesado && c.pef_Lmin != null
+          ? enElPico(c.pef_Lmin, c.t_pef_s, tiempo, flujo, 1)
+          : enSenal(c.t_pef_s)
     if (c.t_pif_s != null && yPif != null) {
       marcas.push({
         x: c.t_pif_s, y: yPif, color: MARCA_PIF, destacada,
-        titulo: `Ciclo ${c.numero ?? '?'} · PIF ${f.num(c.pif_Lmin, 1, 'L/min')}`,
-        etiqueta: destacada ? `PIF ${f.num(c.pif_Lmin, 1)}` : undefined,
+        titulo: `Ciclo ${c.numero ?? '?'} · PIF ${f.num(f.picoFlujo(c.pif_Lmin), 1, 'L/min')}`,
+        etiqueta: destacada ? `PIF ${f.num(f.picoFlujo(c.pif_Lmin), 1)}` : undefined,
       })
     }
     if (c.t_pef_s != null && yPef != null) {
       marcas.push({
         x: c.t_pef_s, y: yPef, color: MARCA_PEF, destacada,
-        titulo: `Ciclo ${c.numero ?? '?'} · PEF ${f.num(c.pef_Lmin, 1, 'L/min')}`,
-        etiqueta: destacada ? `PEF ${f.num(c.pef_Lmin, 1)}` : undefined,
+        titulo: `Ciclo ${c.numero ?? '?'} · PEF ${f.num(f.picoFlujo(c.pef_Lmin), 1, 'L/min')}`,
+        etiqueta: destacada ? `PEF ${f.num(f.picoFlujo(c.pef_Lmin), 1)}` : undefined,
       })
     }
     return marcas
@@ -210,19 +239,23 @@ export function TrainingViewer({ idPaciente, idEntrenamiento, onVolver, onAnteri
   }, [ciclos.length])
 
   // La señal completa: tiempo desde el inicio del CSV (así coincide con los
-  // t_*_s del JSON), la presión con la convención clínica y el flujo
-  // procesado (el de las métricas); si el CSV no lo trae, el crudo.
+  // t_*_s del JSON), la presión con la inspiración en negativo (como la manda
+  // el equipo; las sesiones viejas la traían al revés y se dan vuelta) y el
+  // flujo procesado (el de las métricas); si el CSV no lo trae, el crudo.
   const completa = useMemo(() => {
     if (!senal || senal.tiempo_s.length === 0) return null
     const t0 = senal.tiempo_s[0]
+    const tiempo = senal.tiempo_s.map((t) => t - t0)
     const procesado = senal.flujo_proc_lmin != null
+    const momentosPim = ciclos.flatMap((c) => (c.t_pim_s != null ? [c.t_pim_s] : []))
+    const darVuelta = f.presionPositivaAlInspirar(tiempo, senal.presion_cmh2o, momentosPim, senal.flujo_proc_lmin)
     return {
-      tiempo: senal.tiempo_s.map((t) => t - t0),
-      presion: senal.presion_cmh2o.map((p) => -p),
+      tiempo,
+      presion: darVuelta ? senal.presion_cmh2o.map((p) => 0 - p) : senal.presion_cmh2o,
       flujo: senal.flujo_proc_lmin ?? senal.flujo_lmin,
       procesado,
     }
-  }, [senal])
+  }, [senal, ciclos])
 
   const cicloElegido = elegido != null ? ciclos[elegido] ?? null : null
   const ventana: [number, number] | null =
@@ -248,7 +281,10 @@ export function TrainingViewer({ idPaciente, idEntrenamiento, onVolver, onAnteri
   }, [completa, ventana?.[0], ventana?.[1]])
 
   const franjas = useMemo(() => franjasDe(ciclos, elegido), [ciclos, elegido])
-  const marcasP = useMemo(() => marcasPresion(ciclos, elegido), [ciclos, elegido])
+  const marcasP = useMemo(
+    () => (completa ? marcasPresion(ciclos, elegido, completa.tiempo, completa.presion) : []),
+    [ciclos, elegido, completa],
+  )
   const marcasF = useMemo(
     () => (completa ? marcasFlujo(ciclos, elegido, completa.tiempo, completa.flujo, completa.procesado) : []),
     [ciclos, elegido, completa],
@@ -286,16 +322,19 @@ export function TrainingViewer({ idPaciente, idEntrenamiento, onVolver, onAnteri
         { etiqueta: 'PEM promedio', valor: f.num(f.pemClinica(p?.pem_cmH2O), 1, 'cmH₂O') },
         { etiqueta: 'PEM máxima', valor: f.num(f.pemClinica(m?.pem_max_cmH2O), 1, 'cmH₂O'), detalle: f.enCiclo(m?.pem_max_ciclo) },
         { etiqueta: 'Caída de la PIM', valor: f.num(m?.caida_pim_pct, 1, '%'), detalle: m?.caida_pim_pct != null ? (m.caida_pim_pct > 0 ? ' cayó' : ' no cayó') : undefined },
-        { etiqueta: 'Pendiente de la PIM', valor: f.num(m?.pendiente_pim_por_ciclo, 2, 'cmH₂O/ciclo') },
+        {
+          etiqueta: 'Pendiente de la PIM',
+          valor: f.num(f.pendientePimClinica(m?.pendiente_pim_por_ciclo, p?.pim_cmH2O ?? m?.pim_max_cmH2O), 2, 'cmH₂O/ciclo'),
+        },
       ],
     },
     {
       titulo: 'Flujo y volumen',
       metricas: [
-        { etiqueta: 'PIF promedio', valor: f.num(p?.pif_Lmin, 1, 'L/min') },
-        { etiqueta: 'PIF máximo', valor: f.num(m?.pif_max_Lmin, 1, 'L/min'), detalle: f.enCiclo(m?.pif_max_ciclo) },
-        { etiqueta: 'PEF promedio', valor: f.num(p?.pef_Lmin, 1, 'L/min') },
-        { etiqueta: 'PEF máximo', valor: f.num(m?.pef_max_Lmin, 1, 'L/min'), detalle: f.enCiclo(m?.pef_max_ciclo) },
+        { etiqueta: 'PIF promedio', valor: f.num(f.picoFlujo(p?.pif_Lmin), 1, 'L/min') },
+        { etiqueta: 'PIF máximo', valor: f.num(f.picoFlujo(m?.pif_max_Lmin), 1, 'L/min'), detalle: f.enCiclo(m?.pif_max_ciclo) },
+        { etiqueta: 'PEF promedio', valor: f.num(f.picoFlujo(p?.pef_Lmin), 1, 'L/min') },
+        { etiqueta: 'PEF máximo', valor: f.num(f.picoFlujo(m?.pef_max_Lmin), 1, 'L/min'), detalle: f.enCiclo(m?.pef_max_ciclo) },
         { etiqueta: 'Volumen inspirado prom.', valor: f.num(p?.vol_insp_L, 2, 'L') },
         { etiqueta: 'Volumen espirado prom.', valor: f.num(p?.vol_esp_L, 2, 'L') },
       ],
@@ -322,8 +361,8 @@ export function TrainingViewer({ idPaciente, idEntrenamiento, onVolver, onAnteri
         { etiqueta: 'Tramo', valor: `${f.num(c.t_inicio_s, 2)} – ${f.num(c.t_fin_s, 2)} s` },
         { etiqueta: 'PIM', valor: f.num(f.pimClinica(c.pim_cmH2O), 1, 'cmH₂O'), detalle: prom(f.num(f.pimClinica(p?.pim_cmH2O), 1)) },
         { etiqueta: 'PEM', valor: f.num(f.pemClinica(c.pem_cmH2O), 1, 'cmH₂O'), detalle: prom(f.num(f.pemClinica(p?.pem_cmH2O), 1)) },
-        { etiqueta: 'PIF', valor: f.num(c.pif_Lmin, 1, 'L/min'), detalle: prom(f.num(p?.pif_Lmin, 1)) },
-        { etiqueta: 'PEF', valor: f.num(c.pef_Lmin, 1, 'L/min'), detalle: prom(f.num(p?.pef_Lmin, 1)) },
+        { etiqueta: 'PIF', valor: f.num(f.picoFlujo(c.pif_Lmin), 1, 'L/min'), detalle: prom(f.num(f.picoFlujo(p?.pif_Lmin), 1)) },
+        { etiqueta: 'PEF', valor: f.num(f.picoFlujo(c.pef_Lmin), 1, 'L/min'), detalle: prom(f.num(f.picoFlujo(p?.pef_Lmin), 1)) },
         { etiqueta: 'Volumen inspirado', valor: f.num(c.vol_insp_L, 2, 'L'), detalle: prom(f.num(p?.vol_insp_L, 2)) },
         { etiqueta: 'Volumen espirado', valor: f.num(c.vol_esp_L, 2, 'L'), detalle: prom(f.num(p?.vol_esp_L, 2)) },
         { etiqueta: 'Ti', valor: f.num(c.ti_s, 2, 's'), detalle: prom(f.num(p?.ti_s, 2)) },
@@ -549,8 +588,8 @@ export function TrainingViewer({ idPaciente, idEntrenamiento, onVolver, onAnteri
                   <td>{f.num(ciclo.te_s, 2)}</td>
                   <td>{f.num(ciclo.pausa_s, 2)}</td>
                   <td>{f.num(ciclo.ti_ttot, 2)}</td>
-                  <td>{f.num(ciclo.pif_Lmin, 1)}</td>
-                  <td>{f.num(ciclo.pef_Lmin, 1)}</td>
+                  <td>{f.num(f.picoFlujo(ciclo.pif_Lmin), 1)}</td>
+                  <td>{f.num(f.picoFlujo(ciclo.pef_Lmin), 1)}</td>
                   <td>{f.num(ciclo.vol_insp_L, 2)}</td>
                   <td>{f.num(ciclo.vol_esp_L, 2)}</td>
                   <td>{f.num(f.pimClinica(ciclo.pim_cmH2O), 1)}</td>
