@@ -142,27 +142,70 @@ function DispositivoModal({ pacientes, onClose }: DispositivoPanelProps & { onCl
       ? estado.usuario_en_dispositivo !== estado.paciente.nombre_usuario
       : false
   const candidatos = pacientes.filter((p) => p.nombreUsuario && p.nombreUsuario !== estado?.paciente?.nombre_usuario)
+  const puedePedir = estado != null && estado.puede_operar && !hayActiva
+
+  // Todos los botones van abajo, en la fila del modal. Mientras se confirma
+  // una acción: "Volver" y el botón de esa acción. Si no: a la izquierda lo
+  // que se le puede pedir al dispositivo, y a la derecha actualizar y cerrar.
+  const acciones =
+    accion !== null ? (
+      <>
+        <button type="button" className="btn btn-outline" onClick={() => setAccion(null)} disabled={enviando}>
+          Volver
+        </button>
+        <button
+          type="button"
+          className="btn btn-teal"
+          disabled={enviando || (accion !== 'formatear' && !elegido)}
+          onClick={confirmarAccion}
+        >
+          {enviando
+            ? 'Enviando…'
+            : accion === 'asignar'
+              ? 'Asignar'
+              : accion === 'cambiar'
+                ? 'Cambiar usuario'
+                : 'Formatear'}
+        </button>
+      </>
+    ) : (
+      <>
+        {puedePedir && (
+          <div className="modal-actions-izquierda">
+            {!estado.paciente && (
+              <button type="button" className="btn btn-teal" onClick={() => setAccion('asignar')}>
+                Asignar paciente
+              </button>
+            )}
+            {estado.paciente && (
+              <button type="button" className="btn btn-outline" onClick={() => setAccion('cambiar')}>
+                Cambiar usuario
+              </button>
+            )}
+            <button
+              type="button"
+              className="btn btn-outline"
+              onClick={() => setAccion('formatear')}
+              title="Formatear dispositivo"
+            >
+              Formatear
+            </button>
+          </div>
+        )}
+        <button type="button" className="btn btn-outline" onClick={() => void actualizar()} disabled={cargando}>
+          {cargando ? 'Actualizando…' : 'Actualizar estado'}
+        </button>
+        <button type="button" className="btn btn-teal" onClick={onClose}>
+          Cerrar
+        </button>
+      </>
+    )
 
   return (
-    <Modal
-      titulo="Dispositivo"
-      wide
-      onClose={onClose}
-      acciones={
-        <>
-          <button type="button" className="btn btn-outline" onClick={() => void actualizar()} disabled={cargando}>
-            {cargando ? 'Actualizando…' : 'Actualizar estado'}
-          </button>
-          <button type="button" className="btn btn-teal" onClick={onClose}>
-            Cerrar
-          </button>
-        </>
-      }
-    >
+    <Modal titulo="Dispositivo" wide className="modal-dispositivo" onClose={onClose} acciones={acciones}>
       <div className="dispositivo-modal">
-        {error && <div className="auth-alert error">{error}</div>}
-
         {cargando && !estado && <p>Cargando…</p>}
+        {error && !estado && <div className="auth-alert error">{error}</div>}
 
         {estado && (
           <>
@@ -192,49 +235,36 @@ function DispositivoModal({ pacientes, onClose }: DispositivoPanelProps & { onCl
               </div>
             </div>
 
-            {otroCargado && (
-              <div className="auth-alert error">
-                El dispositivo tiene cargado a otro usuario ({estado.usuario_en_dispositivo}). Formatealo para cargar el
-                perfil correcto.
-              </div>
-            )}
+            {/* Los avisos van siempre acá, debajo de los datos: así el código y los datos no se mueven. */}
+            <div className="dispositivo-avisos">
+              {error && <div className="auth-alert error">{error}</div>}
 
-            {descripcion && (
-              <div className={`auth-alert ${descripcion.tono} dispositivo-pedido`}>
-                <span>
-                  {descripcion.texto}
-                  {hayActiva && ' Para aplicarlo, tocá Sincronizar en el dispositivo.'}
-                </span>
-                {solicitud?.cancelable && (
-                  <button
-                    type="button"
-                    className="btn btn-outline"
-                    disabled={enviando}
-                    onClick={() => void ejecutar(() => apiDispositivo.cancelar(token!, solicitud.id_solicitud))}
-                  >
-                    Cancelar pedido
-                  </button>
-                )}
-              </div>
-            )}
+              {otroCargado && (
+                <div className="auth-alert error">
+                  El dispositivo tiene cargado a otro usuario ({estado.usuario_en_dispositivo}). Formatealo para cargar
+                  el perfil correcto.
+                </div>
+              )}
 
-            {estado.puede_operar && !hayActiva && accion === null && (
-              <div className="dispositivo-acciones">
-                {!estado.paciente && (
-                  <button type="button" className="btn btn-teal" onClick={() => setAccion('asignar')}>
-                    Asignar paciente
-                  </button>
-                )}
-                {estado.paciente && (
-                  <button type="button" className="btn btn-outline" onClick={() => setAccion('cambiar')}>
-                    Cambiar usuario
-                  </button>
-                )}
-                <button type="button" className="btn btn-outline" onClick={() => setAccion('formatear')}>
-                  Formatear dispositivo
-                </button>
-              </div>
-            )}
+              {descripcion && (
+                <div className={`auth-alert ${descripcion.tono} dispositivo-pedido`}>
+                  <span>
+                    {descripcion.texto}
+                    {hayActiva && ' Para aplicarlo, tocá Sincronizar en el dispositivo.'}
+                  </span>
+                  {solicitud?.cancelable && (
+                    <button
+                      type="button"
+                      className="btn btn-outline"
+                      disabled={enviando}
+                      onClick={() => void ejecutar(() => apiDispositivo.cancelar(token!, solicitud.id_solicitud))}
+                    >
+                      Cancelar pedido
+                    </button>
+                  )}
+                </div>
+              )}
+            </div>
 
             {accion !== null && (
               <section className="dispositivo-confirmar">
@@ -265,26 +295,6 @@ function DispositivoModal({ pacientes, onClose }: DispositivoPanelProps & { onCl
                       ` En la última conexión tenía ${estado.archivos_pendientes} prueba(s) sin sincronizar: si siguen así, el dispositivo se va a negar.`}
                   </div>
                 )}
-
-                <div className="dispositivo-acciones">
-                  <button type="button" className="btn btn-outline" onClick={() => setAccion(null)}>
-                    Volver
-                  </button>
-                  <button
-                    type="button"
-                    className="btn btn-teal"
-                    disabled={enviando || (accion !== 'formatear' && !elegido)}
-                    onClick={confirmarAccion}
-                  >
-                    {enviando
-                      ? 'Enviando…'
-                      : accion === 'asignar'
-                        ? 'Asignar'
-                        : accion === 'cambiar'
-                          ? 'Cambiar usuario'
-                          : 'Formatear'}
-                  </button>
-                </div>
               </section>
             )}
           </>

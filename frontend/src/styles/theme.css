@@ -1555,6 +1555,24 @@ button.cal-ribbon {
   width: 100%;
   text-align: center;
   box-shadow: 0 20px 50px rgba(0, 0, 0, 0.2);
+  /* Nunca más alto que la pantalla: título y botones fijos, el medio scrollea. */
+  display: flex;
+  flex-direction: column;
+  max-height: calc(100vh - 32px);
+  max-height: calc(100dvh - 32px);
+}
+
+.modal > h3 {
+  flex: none;
+}
+
+.modal-cuerpo {
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow-y: auto;
+  /* Un poco de aire a los costados, así los bordes y el foco no quedan cortados. */
+  margin: 0 -6px;
+  padding: 0 6px;
 }
 
 .modal.modal-wide {
@@ -1580,10 +1598,26 @@ button.cal-ribbon {
 }
 
 .modal-actions {
+  flex: none;
   display: flex;
+  flex-wrap: wrap;
   gap: 10px;
   justify-content: flex-end;
   margin-top: 6px;
+}
+
+/* En un modal, un botón nunca se sale del recuadro: si no entra, baja de línea. */
+.modal .btn {
+  max-width: 100%;
+  white-space: normal;
+  text-align: center;
+  justify-content: center;
+}
+
+@media (max-width: 480px) {
+  .modal {
+    padding: 24px 20px;
+  }
 }
 
 /* ---------- Video tutoriales ---------- */
@@ -2169,9 +2203,13 @@ button.cal-ribbon {
   }
 }
 
-/* ---------- Modal del dispositivo (pages/medico/DispositivoPanel.tsx) ---------- */
-.modal.modal-wide:has(> .dispositivo-modal) {
-  max-width: 640px;
+/* ---------- Modal del dispositivo (pages/medico/DispositivoPanel.tsx y paciente/DispositivoPacientePanel.tsx) ---------- */
+/*
+ * Siempre el mismo orden, de arriba abajo, así nada salta de lugar: el
+ * código, los datos, los avisos (errores y el último pedido) y las acciones.
+ */
+.modal.modal-dispositivo {
+  max-width: 680px;
 }
 
 .dispositivo-modal {
@@ -2179,6 +2217,16 @@ button.cal-ribbon {
   flex-direction: column;
   gap: 14px;
   margin: 8px 0 12px;
+}
+
+.dispositivo-avisos {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.dispositivo-avisos:empty {
+  display: none;
 }
 
 .dispositivo-modal .auth-alert {
@@ -2216,11 +2264,14 @@ button.cal-ribbon {
   font-size: 13px;
   color: var(--ink-soft);
   max-width: 440px;
+  overflow-wrap: anywhere;
 }
 
+/* Los datos van todos en una fila, del mismo ancho (2 o 3, según la vista); en el celular, uno abajo del otro. */
 .dispositivo-datos {
   display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+  grid-auto-flow: column;
+  grid-auto-columns: minmax(0, 1fr);
   gap: 10px;
 }
 
@@ -2257,14 +2308,21 @@ button.cal-ribbon {
   gap: 12px;
 }
 
+.dispositivo-pedido > span {
+  flex: 1;
+  min-width: 0;
+}
+
 .dispositivo-pedido .btn {
   flex-shrink: 0;
 }
 
-.dispositivo-acciones {
+/* En la fila de botones del modal: lo que se le pide al dispositivo a la izquierda, actualizar y cerrar a la derecha. */
+.modal-actions-izquierda {
   display: flex;
   flex-wrap: wrap;
   gap: 10px;
+  margin-right: auto;
 }
 
 .dispositivo-confirmar {
@@ -2286,11 +2344,15 @@ button.cal-ribbon {
 
 @media (max-width: 560px) {
   .dispositivo-datos {
+    grid-auto-flow: row;
     grid-template-columns: 1fr;
   }
   .dispositivo-pedido {
     flex-direction: column;
-    align-items: flex-start;
+    align-items: stretch;
+  }
+  .dispositivo-codigo-numero {
+    font-size: 40px;
   }
 }
 

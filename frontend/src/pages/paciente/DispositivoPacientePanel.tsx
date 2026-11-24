@@ -66,6 +66,7 @@ function DispositivoPacienteModal({ onClose }: { onClose: () => void }) {
     <Modal
       titulo="Sincronizar dispositivo"
       wide
+      className="modal-dispositivo"
       onClose={onClose}
       acciones={
         <>
@@ -79,42 +80,44 @@ function DispositivoPacienteModal({ onClose }: { onClose: () => void }) {
       }
     >
       <div className="dispositivo-modal">
-        {error && <div className="auth-alert error">{error}</div>}
-
         {cargando && !estado && <p>Cargando…</p>}
+        {error && !estado && <div className="auth-alert error">{error}</div>}
 
         {estado && (
           <>
             <CodigoConexion conexion={estado.conexion} />
 
-            {estado.asignado ? (
-              <>
-                <div className="dispositivo-datos">
-                  <div className="dispositivo-dato">
-                    <span>Última conexión</span>
-                    <strong>{textoUltimaConexion(estado.ultimo_contacto)}</strong>
-                  </div>
-                  <div className="dispositivo-dato">
-                    <span>PIN en el dispositivo</span>
-                    <strong>{estado.pin_actualizado ? 'Actualizado' : 'Pendiente'}</strong>
-                  </div>
+            {estado.asignado && (
+              <div className="dispositivo-datos">
+                <div className="dispositivo-dato">
+                  <span>Última conexión</span>
+                  <strong>{textoUltimaConexion(estado.ultimo_contacto)}</strong>
                 </div>
-
-                {estado.pin_actualizado ? (
-                  <div className="auth-alert ok">Tu dispositivo ya tiene tu PIN actual.</div>
-                ) : (
-                  <div className="auth-alert info">
-                    Tu dispositivo todavía no tiene tu PIN actual. Conectalo con el código de arriba y tocá
-                    Sincronizar en el dispositivo: te va a pedir que ingreses tu PIN. Después tocá "Actualizar
-                    estado" para confirmarlo acá.
-                  </div>
-                )}
-              </>
-            ) : (
-              <div className="auth-alert info">
-                El dispositivo todavía no está configurado con tu perfil. Pedíselo a tu médico.
+                <div className="dispositivo-dato">
+                  <span>PIN en el dispositivo</span>
+                  <strong>{estado.pin_actualizado ? 'Actualizado' : 'Pendiente'}</strong>
+                </div>
               </div>
             )}
+
+            {/* Los avisos van siempre acá, debajo de los datos: así el código y los datos no se mueven. */}
+            <div className="dispositivo-avisos">
+              {error && <div className="auth-alert error">{error}</div>}
+
+              {!estado.asignado ? (
+                <div className="auth-alert info">
+                  El dispositivo todavía no está configurado con tu perfil. Pedíselo a tu médico.
+                </div>
+              ) : estado.pin_actualizado ? (
+                <div className="auth-alert ok">Tu dispositivo ya tiene tu PIN actual.</div>
+              ) : (
+                <div className="auth-alert info">
+                  Tu dispositivo todavía no tiene tu PIN actual. Conectalo con el código de arriba y tocá Sincronizar
+                  en el dispositivo: te va a pedir que ingreses tu PIN. Después tocá "Actualizar estado" para
+                  confirmarlo acá.
+                </div>
+              )}
+            </div>
           </>
         )}
       </div>

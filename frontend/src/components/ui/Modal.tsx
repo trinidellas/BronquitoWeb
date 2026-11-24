@@ -8,10 +8,16 @@ interface ModalProps {
   wide?: boolean
   /** Contenido de los botones de acción, alineados a la derecha. Si no se pasa, se muestra un botón "Entendido". */
   acciones?: ReactNode
+  /** Clase extra para el recuadro (ej. un ancho propio). */
+  className?: string
 }
 
-/** Modal accesible: cierra con Escape, cierra al click en el backdrop, y mueve el foco al abrirse. */
-export function Modal({ titulo, onClose, children, wide, acciones }: ModalProps) {
+/**
+ * Modal accesible: cierra con Escape, cierra al click en el backdrop, y mueve el foco al abrirse.
+ * Nunca es más alto que la pantalla: el título y los botones quedan fijos y,
+ * si el contenido no entra, se scrollea sólo el medio.
+ */
+export function Modal({ titulo, onClose, children, wide, acciones, className }: ModalProps) {
   const dialogRef = useRef<HTMLDivElement>(null)
 
   useEffect(() => {
@@ -32,14 +38,14 @@ export function Modal({ titulo, onClose, children, wide, acciones }: ModalProps)
     >
       <div
         ref={dialogRef}
-        className={['modal', wide ? 'modal-wide' : ''].filter(Boolean).join(' ')}
+        className={['modal', wide ? 'modal-wide' : '', className ?? ''].filter(Boolean).join(' ')}
         role="dialog"
         aria-modal="true"
         aria-labelledby="modal-title"
         tabIndex={-1}
       >
         <h3 id="modal-title">{titulo}</h3>
-        {children}
+        <div className="modal-cuerpo">{children}</div>
         <div className="modal-actions">
           {acciones ?? (
             <button className="btn btn-teal" onClick={onClose}>
