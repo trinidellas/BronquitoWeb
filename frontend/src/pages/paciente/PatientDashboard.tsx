@@ -1,5 +1,6 @@
 
 import { useEffect, useMemo, useState } from 'react'
+import { useLocation } from 'react-router-dom'
 import { diasVigentesEn, MonthCalendar } from '../../components/ui/MonthCalendar'
 import { VideoLightbox } from '../../components/ui/VideoLightbox'
 import { VideoCarousel } from '../../components/ui/VideoCarousel'
@@ -31,6 +32,16 @@ function diaDeSemana(fecha: Date): number {
 export function PatientDashboard() {
   const [subVista, setSubVista] = useState<SubVista>('resumen')
   const [videoAbierto, setVideoAbierto] = useState<{ id: string; titulo: string } | null>(null)
+
+  // Tocar el patito del encabezado (ver Header) vuelve al resumen, aunque ya
+  // se esté en esta página mirando el calendario.
+  const location = useLocation()
+  const inicio = (location.state as { inicio?: number } | null)?.inicio
+  useEffect(() => {
+    if (inicio == null) return
+    setSubVista('resumen')
+    setVideoAbierto(null)
+  }, [inicio])
 
   const { perfil, token } = useSession()
 

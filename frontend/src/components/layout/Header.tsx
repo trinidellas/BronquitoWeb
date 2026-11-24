@@ -1,7 +1,7 @@
 import { DuckLogo } from '../ui/DuckLogo'
 import { WaveBottom } from '../ui/WaveBottom'
 import { useSession } from '../../auth/session'
-import { useNavigate } from 'react-router-dom'
+import { Link, useNavigate } from 'react-router-dom'
 
 function iniciales(nombre: string, apellido: string, fallback: string): string {
   const a = nombre.trim()[0] ?? ''
@@ -36,13 +36,23 @@ export function Header() {
         Saltar al contenido principal
       </a>
       <div className="topbar">
-        <div className="brand">
+        {/* El patito lleva al inicio, como el logo de cualquier página. El `state`
+            avisa que se tocó (ver PatientDashboard), así vuelve al resumen
+            aunque ya se esté en "/". */}
+        <Link
+          to="/"
+          state={{ inicio: Date.now() }}
+          className="brand"
+          aria-label="Bronquito: ir al inicio"
+          title="Ir al inicio"
+          onClick={() => window.scrollTo({ top: 0 })}
+        >
           <DuckLogo className="brand-duck" />
           <div>
             <div className="brand-name">Bronquito</div>
             <div className="brand-tag">La vía para respirar mejor</div>
           </div>
-        </div>
+        </Link>
 
         <div className="who">
           <button

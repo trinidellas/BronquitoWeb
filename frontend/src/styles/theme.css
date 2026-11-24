@@ -142,6 +142,22 @@ textarea:focus-visible,
   cursor: pointer;
   padding: 4px;
   text-align: left;
+  text-decoration: none;
+  border-radius: 14px;
+}
+
+/* El logo es el link al inicio: con el teclado se ve dónde está el foco. */
+.brand:focus-visible {
+  outline: 2px solid #fff;
+  outline-offset: 2px;
+}
+
+.brand .brand-duck {
+  transition: transform 0.15s;
+}
+
+.brand:hover .brand-duck {
+  transform: rotate(-8deg);
 }
 
 .brand-duck {
