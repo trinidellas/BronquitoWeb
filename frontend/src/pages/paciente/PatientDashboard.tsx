@@ -7,7 +7,7 @@ import { VideoCarousel } from '../../components/ui/VideoCarousel'
 import type { VideoTutorial } from '../../components/ui/VideoCarousel'
 import { MedicalTeamPanel } from './MedicalTeamPanel'
 import { DispositivoPacientePanel } from './DispositivoPacientePanel'
-import { formatearFecha, isoArgentina } from '../../data/mockData'
+import { formatearFecha, formatearHora, isoArgentina } from '../../data/mockData'
 import { useSession } from '../../auth/session'
 import { ApiError, api } from '../../api/client'
 import type { Entrenamiento, Evaluacion, Frecuencia } from '../../api/types'
@@ -301,7 +301,9 @@ export function PatientDashboard() {
                   ? 'Cargando tu última evaluación…'
                   : errorEvaluaciones
                     ? errorEvaluaciones
-                    : `Tu última evaluación fue el ${evaluaciones[0] ? formatearFecha(evaluaciones[0].fecha_hora) : '—'}.`}{' '}
+                    : evaluaciones[0]
+                      ? `Tu última evaluación fue el ${formatearFecha(evaluaciones[0].fecha_hora)} a las ${formatearHora(evaluaciones[0].fecha_hora)}.`
+                      : 'Todavía no hiciste ninguna evaluación.'}{' '}
                 La evaluación mide qué tan fuerte y eficiente es tu respiración para ajustar la resistencia del
                 dispositivo.
               </p>

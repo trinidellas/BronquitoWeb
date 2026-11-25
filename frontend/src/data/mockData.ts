@@ -19,6 +19,16 @@ export function formatearFecha(fecha: string | Date, opts: Intl.DateTimeFormatOp
   return d.toLocaleDateString('es-AR', opts).replace('.', '')
 }
 
+/**
+ * La hora de una medición, ej. "18:30" (24 h, como en los PDF). Sirve para
+ * distinguir varias sesiones del mismo día. `fecha_hora` es la hora local
+ * del equipo, sin zona: se muestra tal cual.
+ */
+export function formatearHora(fecha: string | Date): string {
+  const d = typeof fecha === 'string' ? new Date(fecha) : fecha
+  return d.toLocaleTimeString('es-AR', { hour: '2-digit', minute: '2-digit', hourCycle: 'h23' })
+}
+
 const FORMATO_ISO_ARGENTINA = new Intl.DateTimeFormat('en-CA', { timeZone: 'America/Argentina/Buenos_Aires' })
 
 /**

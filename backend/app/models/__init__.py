@@ -7,7 +7,6 @@ crear las tablas, y para que las relaciones declaradas como strings
 
 from app.models.anotacion import Anotacion
 from app.models.configuracion_dispositivo import (
-    ConfiguracionRepeticiones,
     ConfiguracionResistencia,
     EcuacionPredichos,
     FrecuenciaConfirmada,
@@ -47,7 +46,6 @@ __all__ = [
     "ArchivoDispositivo",  # tabla archivos_dispositivo (pruebas subidas desde la SD)
     # Configuración que viaja al equipo (ver app/models/configuracion_dispositivo.py).
     "ConfiguracionResistencia",  # tabla configuracion_resistencia
-    "ConfiguracionRepeticiones",  # tabla configuracion_repeticiones
     "FrecuenciaConfirmada",  # tabla frecuencia_confirmada
     "EcuacionPredichos",  # tabla ecuacion_predichos
 ]

@@ -7,7 +7,7 @@ import { claveGraficoSenal, comentariosDeSesion, useAnotaciones } from '../../an
 import { SignalXYChart } from '../../components/ui/SignalXYChart'
 import { CursorContext, useCursorNuevo } from '../../components/ui/cursorSincronizado'
 import { TIPO_CSV, TIPO_PDF, elegirDestino } from '../../exportar/archivos'
-import { formatearFecha } from '../../data/mockData'
+import { formatearFecha, formatearHora } from '../../data/mockData'
 import { GRAFICOS_POR_TIPO, csvDeSenales, fechaParaArchivo } from './graficosSenales'
 import type { PuntoAnotado } from './NotasSesionPanel'
 import { NotasSesionPanel } from './NotasSesionPanel'
@@ -202,7 +202,7 @@ export function SignalViewer({
           <button className="signal-tipo-toggle" onClick={onCambiarTipo} title="Ver la otra señal de esta fecha">
             {evaluacion.tipo === 'ESPIROMETRIA' ? 'Espirometría' : 'PIM'}
           </button>{' '}
-          · {formatearFecha(evaluacion.fecha_hora)}
+          · {formatearFecha(evaluacion.fecha_hora)}, {formatearHora(evaluacion.fecha_hora)}
         </h3>
 
         <div className="signal-header-acciones">

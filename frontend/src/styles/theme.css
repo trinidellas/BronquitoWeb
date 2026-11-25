@@ -2373,31 +2373,6 @@ button.cal-ribbon {
   vertical-align: middle;
 }
 
-/* --- Repeticiones por sesión (modal de pages/medico/ResistenciaEquipo.tsx) --- */
-.repeticiones-stepper {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-}
-
-.field .repeticiones-stepper input {
-  width: 96px;
-  text-align: center;
-  font-size: 16px;
-  font-weight: 800;
-}
-
-.repeticiones-stepper .freq-option {
-  min-width: 44px;
-  min-height: 44px;
-  font-size: 18px;
-}
-
-.repeticiones-stepper .freq-option:disabled {
-  opacity: 0.4;
-  cursor: not-allowed;
-}
-
 /* --- Franja de resistencia (pages/medico/entrenamiento/ResistenciaFranja.tsx) --- */
 .resistencia-franja {
   margin-top: 16px;

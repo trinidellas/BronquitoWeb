@@ -11,10 +11,10 @@ import { Modal } from '../../components/ui/Modal'
 import { TrashIcon } from '../../components/ui/TrashIcon'
 import { EyeIcon } from '../../components/ui/EyeIcon'
 import { FrequencyModal } from './FrequencyModal'
-import { TagsEquipo } from './ResistenciaEquipo'
+import { ResistenciaTag } from './ResistenciaEquipo'
 import * as fmtEntrenamiento from './entrenamiento/formato'
 import { ResistenciaFranja } from './entrenamiento/ResistenciaFranja'
-import { formatearFecha, isoArgentina } from '../../data/mockData'
+import { formatearFecha, formatearHora, isoArgentina } from '../../data/mockData'
 import { TIPO_CSV, TIPO_PDF, elegirDestino } from '../../exportar/archivos'
 import {
   agruparEnSesiones,
@@ -317,7 +317,7 @@ export function PatientDetail({ paciente, onDesvincular }: PatientDetailProps) {
               Resistencia actual: {rutina ? `Nivel ${rutina.resistencia_activa}` : 'sin definir'}
             </span>
             {token && (
-              <TagsEquipo token={token} idPaciente={Number(paciente.id)} nombrePaciente={paciente.nombre} />
+              <ResistenciaTag token={token} idPaciente={Number(paciente.id)} nombrePaciente={paciente.nombre} />
             )}
             <button
               className="tag tag-clickable"
@@ -405,6 +405,7 @@ export function PatientDetail({ paciente, onDesvincular }: PatientDetailProps) {
                           <span className="sr-only">En gráficos e informe</span>
                         </th>
                         <th>Fecha</th>
+                        <th>Hora</th>
                         <th>FVC (L)</th>
                         <th>FEV1 (L)</th>
                         <th>PEF (L/min)</th>
@@ -430,6 +431,7 @@ export function PatientDetail({ paciente, onDesvincular }: PatientDetailProps) {
                               />
                             </td>
                             <td>{formatearFecha(sesion.fecha_hora)}</td>
+                            <td>{formatearHora(sesion.fecha_hora)}</td>
                             <td>{sesion.espirometria?.fvc ?? '—'}</td>
                             <td>{sesion.espirometria?.fev1 ?? '—'}</td>
                             <td>{sesion.espirometria?.pef ?? '—'}</td>
@@ -505,6 +507,7 @@ export function PatientDetail({ paciente, onDesvincular }: PatientDetailProps) {
                           <span className="sr-only">En gráficos e informe</span>
                         </th>
                         <th>Fecha</th>
+                        <th>Hora</th>
                         <th>Estado</th>
                         <th>Ciclos</th>
                         <th>Duración</th>
@@ -524,6 +527,7 @@ export function PatientDetail({ paciente, onDesvincular }: PatientDetailProps) {
                             />
                           </td>
                           <td>{fmtEntrenamiento.fecha(e, false)}</td>
+                          <td>{fmtEntrenamiento.hora(e)}</td>
                           <td>
                             <span className={`entrenamiento-estado estado-${e.estado ?? 'desconocido'}`}>
                               {fmtEntrenamiento.estado(e)}

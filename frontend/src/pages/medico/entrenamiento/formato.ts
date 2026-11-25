@@ -1,4 +1,5 @@
 import type { Entrenamiento, EntrenamientoConFecha } from '../../../api/types'
+import { formatearHora } from '../../../data/mockData'
 
 /**
  * Cómo se muestran los datos de un entrenamiento. Todas las pantallas
@@ -116,7 +117,12 @@ export function fecha(e: Pick<Entrenamiento, 'fecha_hora'>, conHora = true): str
   if (!e.fecha_hora) return 'Sin fecha'
   const d = new Date(e.fecha_hora)
   const dia = d.toLocaleDateString('es-AR', { day: '2-digit', month: 'short', year: 'numeric' }).replace('.', '')
-  return conHora ? `${dia}, ${d.toLocaleTimeString('es-AR', { hour: '2-digit', minute: '2-digit' })}` : dia
+  return conHora ? `${dia}, ${formatearHora(d)}` : dia
+}
+
+/** Sólo la hora de la sesión, ej. "18:30" ("--" si no tenía hora). */
+export function hora(e: Pick<Entrenamiento, 'fecha_hora'>): string {
+  return e.fecha_hora ? formatearHora(e.fecha_hora) : SIN_DATO
 }
 
 export const TEXTO_ESTADO: Record<NonNullable<Entrenamiento['estado']>, string> = {

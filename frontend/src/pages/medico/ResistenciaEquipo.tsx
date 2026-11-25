@@ -1,42 +1,33 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { Modal } from '../../components/ui/Modal'
-import { REPETICIONES_MAX, REPETICIONES_MIN, apiResistencia } from '../../api/resistencia'
+import { apiResistencia } from '../../api/resistencia'
 import type { ConfiguracionEquipo, ModoResistencia } from '../../api/resistencia'
 
-interface TagsEquipoProps {
+interface ResistenciaTagProps {
   token: string
   idPaciente: number
   nombrePaciente: string
 }
 
 const NIVELES = [1, 2, 3, 4, 5]
-/** Lo que se propone en el modal si el médico todavía no fijó ninguna. */
-const REPETICIONES_SUGERIDAS = 30
-/** Cada cuánto se vuelve a preguntar si el equipo ya confirmó, mientras haya algo pendiente. */
+/** Cada cuánto se vuelve a preguntar si el equipo ya confirmó, mientras esté pendiente. */
 const INTERVALO_REVISAR_MS = 30_000
 
-function textoTagResistencia(config: ConfiguracionEquipo | null): string {
+function textoTag(config: ConfiguracionEquipo | null): string {
   if (!config) return 'Modo de resistencia: …'
   const r = config.resistencia
   if (!r || r.modo === 'automatico') return 'Modo de resistencia: automático'
   return `Modo de resistencia: manual (nivel ${r.nivel_manual})`
 }
 
-function textoTagRepeticiones(config: ConfiguracionEquipo | null): string {
-  if (!config) return 'Repeticiones: …'
-  const r = config.repeticiones
-  return r ? `Repeticiones: ${r.repeticiones} por sesión` : 'Repeticiones: sin definir'
-}
-
 /**
- * Tags de la ficha del paciente con lo que viaja al equipo cuando sincroniza:
- * cómo se fija la resistencia de la válvula y cuántas repeticiones pide en
- * cada sesión. Cada uno abre su modal para cambiarlo, y muestra un punto
- * amarillo hasta que el equipo confirma que lo guardó.
+ * Tag de la ficha del paciente: muestra cómo está fijada la resistencia de la
+ * válvula y, al tocarlo, abre el modal para cambiarla. Tiene un punto
+ * amarillo hasta que el equipo confirma que la guardó.
  */
-export function TagsEquipo({ token, idPaciente, nombrePaciente }: TagsEquipoProps) {
+export function ResistenciaTag({ token, idPaciente, nombrePaciente }: ResistenciaTagProps) {
   const [config, setConfig] = useState<ConfiguracionEquipo | null>(null)
-  const [abierto, setAbierto] = useState<'resistencia' | 'repeticiones' | null>(null)
+  const [abierto, setAbierto] = useState(false)
   // Sube con cada pedido y con cada cambio guardado: así una respuesta que
   // llega tarde no pisa algo más nuevo (ej. lo que se acaba de guardar).
   const versionRef = useRef(0)
@@ -63,69 +54,49 @@ export function TagsEquipo({ token, idPaciente, nombrePaciente }: TagsEquipoProp
     cargar(true)
   }, [cargar])
 
-  /** Lo que devuelve el servidor al guardar en un modal. */
+  /** Lo que devuelve el servidor al guardar en el modal. */
   const cambio = useCallback((nueva: ConfiguracionEquipo) => {
     versionRef.current++
     setConfig(nueva)
   }, [])
 
-  const resistenciaPendiente = config?.resistencia != null && config.resistencia.confirmada_en == null
-  const repeticionesPendientes = config?.repeticiones != null && config.repeticiones.confirmada_en == null
-  const hayPendiente = resistenciaPendiente || repeticionesPendientes
+  const pendiente = config?.resistencia != null && config.resistencia.confirmada_en == null
 
   // El equipo confirma cuando sincroniza, que puede ser con la ficha abierta:
-  // se vuelve a preguntar al volver a la pestaña y, mientras haya algo
-  // pendiente, cada INTERVALO_REVISAR_MS. Así el punto amarillo se va solo.
+  // se vuelve a preguntar al volver a la pestaña y, mientras esté pendiente,
+  // cada INTERVALO_REVISAR_MS. Así el punto amarillo se va solo.
   useEffect(() => {
     const alVolver = () => {
       if (document.visibilityState === 'visible') cargar(false)
     }
     window.addEventListener('focus', alVolver)
     document.addEventListener('visibilitychange', alVolver)
-    const intervalo = hayPendiente ? window.setInterval(() => cargar(false), INTERVALO_REVISAR_MS) : undefined
+    const intervalo = pendiente ? window.setInterval(() => cargar(false), INTERVALO_REVISAR_MS) : undefined
     return () => {
       window.removeEventListener('focus', alVolver)
       document.removeEventListener('visibilitychange', alVolver)
       if (intervalo !== undefined) window.clearInterval(intervalo)
     }
-  }, [cargar, hayPendiente])
+  }, [cargar, pendiente])
 
   return (
     <>
       <button
         className="tag tag-clickable"
-        onClick={() => setAbierto('resistencia')}
-        title={resistenciaPendiente ? 'Todavía no llegó al equipo' : 'Modificar resistencia'}
+        onClick={() => setAbierto(true)}
+        title={pendiente ? 'Todavía no llegó al equipo' : 'Modificar resistencia'}
       >
-        {textoTagResistencia(config)}
-        {resistenciaPendiente && <span className="resistencia-pendiente" aria-label="sin sincronizar" />}
+        {textoTag(config)}
+        {pendiente && <span className="resistencia-pendiente" aria-label="sin sincronizar" />}
       </button>
-      <button
-        className="tag tag-clickable"
-        onClick={() => setAbierto('repeticiones')}
-        title={repeticionesPendientes ? 'Todavía no llegó al equipo' : 'Modificar repeticiones'}
-      >
-        {textoTagRepeticiones(config)}
-        {repeticionesPendientes && <span className="resistencia-pendiente" aria-label="sin sincronizar" />}
-      </button>
-      {abierto === 'resistencia' && (
+      {abierto && (
         <ResistenciaModal
           token={token}
           idPaciente={idPaciente}
           nombrePaciente={nombrePaciente}
           configInicial={config}
           onCambio={cambio}
-          onClose={() => setAbierto(null)}
-        />
-      )}
-      {abierto === 'repeticiones' && (
-        <RepeticionesModal
-          token={token}
-          idPaciente={idPaciente}
-          nombrePaciente={nombrePaciente}
-          configInicial={config}
-          onCambio={cambio}
-          onClose={() => setAbierto(null)}
+          onClose={() => setAbierto(false)}
         />
       )}
     </>
@@ -277,110 +248,6 @@ function ResistenciaModal({ token, idPaciente, nombrePaciente, configInicial, on
           {r.confirmada_en
             ? 'El equipo ya tiene la configuración actual.'
             : 'La configuración actual todavía no llegó al equipo.'}
-        </p>
-      )}
-      {error && <div className="auth-alert error">{error}</div>}
-    </Modal>
-  )
-}
-
-/** Cuántas repeticiones (respiraciones contra la válvula) pide el equipo en cada sesión de entrenamiento. */
-function RepeticionesModal({ token, idPaciente, nombrePaciente, configInicial, onCambio, onClose }: ResistenciaModalProps) {
-  const actual = configInicial?.repeticiones
-  const [texto, setTexto] = useState(String(actual?.repeticiones ?? REPETICIONES_SUGERIDAS))
-  const [guardando, setGuardando] = useState(false)
-  const [error, setError] = useState<string | null>(null)
-
-  const valor = Number(texto)
-  const valido = Number.isInteger(valor) && valor >= REPETICIONES_MIN && valor <= REPETICIONES_MAX
-  const sinCambios = actual != null && valor === actual.repeticiones
-
-  function sumar(delta: number) {
-    const base = valido ? valor : actual?.repeticiones ?? REPETICIONES_SUGERIDAS
-    setTexto(String(Math.min(REPETICIONES_MAX, Math.max(REPETICIONES_MIN, base + delta))))
-  }
-
-  async function guardar() {
-    if (!valido) return
-    setGuardando(true)
-    setError(null)
-    try {
-      onCambio(await apiResistencia.fijarRepeticiones(token, idPaciente, valor))
-      onClose()
-    } catch (err) {
-      setError(err instanceof Error ? err.message : 'No pudimos guardar el cambio.')
-      setGuardando(false)
-    }
-  }
-
-  return (
-    <Modal
-      titulo="Repeticiones por sesión"
-      onClose={onClose}
-      acciones={
-        <>
-          <button className="btn btn-outline" onClick={onClose} disabled={guardando}>
-            Cancelar
-          </button>
-          <button className="btn btn-teal" onClick={guardar} disabled={guardando || !valido || sinCambios}>
-            {guardando ? 'Guardando…' : 'Guardar'}
-          </button>
-        </>
-      }
-    >
-      <p>
-        Cuántas repeticiones (respiraciones contra la válvula) tiene que hacer {nombrePaciente} en cada sesión de
-        entrenamiento. El cambio llega al equipo la próxima vez que se conecte.
-      </p>
-
-      <div className="field">
-        <label htmlFor="repeticiones-input">Repeticiones</label>
-        <div className="repeticiones-stepper">
-          <button
-            type="button"
-            className="freq-option"
-            onClick={() => sumar(-1)}
-            disabled={valido && valor <= REPETICIONES_MIN}
-            aria-label="Una repetición menos"
-          >
-            −
-          </button>
-          {/* Texto y no "number": así sólo entran dígitos (ni "-", ni coma, ni la "e" que acepta un number). */}
-          <input
-            id="repeticiones-input"
-            type="text"
-            inputMode="numeric"
-            pattern="[0-9]*"
-            maxLength={2}
-            autoComplete="off"
-            value={texto}
-            onChange={(e) => setTexto(e.target.value.replace(/\D/g, '').slice(0, 2))}
-            onKeyDown={(e) => {
-              if (e.key === 'Enter') void guardar()
-            }}
-          />
-          <button
-            type="button"
-            className="freq-option"
-            onClick={() => sumar(1)}
-            disabled={valido && valor >= REPETICIONES_MAX}
-            aria-label="Una repetición más"
-          >
-            +
-          </button>
-        </div>
-        {!valido && (
-          <p className="field-hint">
-            Tiene que ser un número entero entre {REPETICIONES_MIN} y {REPETICIONES_MAX}.
-          </p>
-        )}
-      </div>
-
-      {actual && (
-        <p className="resistencia-ayuda">
-          {actual.confirmada_en
-            ? `El equipo ya tiene las ${actual.repeticiones} repeticiones actuales.`
-            : `Las ${actual.repeticiones} repeticiones actuales todavía no llegaron al equipo.`}
         </p>
       )}
       {error && <div className="auth-alert error">{error}</div>}

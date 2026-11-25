@@ -53,10 +53,6 @@ class ConfirmarResistenciaRequest(BaseModel):
     id_resistencia: int
 
 
-class ConfirmarRepeticionesRequest(BaseModel):
-    id_repeticiones: int
-
-
 # --- Lo que manda la web del médico -------------------------------------------
 
 

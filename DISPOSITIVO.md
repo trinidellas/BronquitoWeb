@@ -16,8 +16,8 @@ Código del servidor:
 | `backend/app/core/entrenamientos_dispositivo.py` | Recepción de entrenamientos (JSON + CSV) y salida para la web |
 | `backend/app/models/entrenamiento.py` | Tablas `entrenamientos`, `ciclos_entrenamiento`, `entrenamientos_csv` y `entrenamientos_json` |
 | `backend/app/core/predichos.py` | FVC predicha (GLI Global 2022) y PIM predicha (Evans y Whitelaw) |
-| `backend/app/models/configuracion_dispositivo.py` | Tablas `configuracion_resistencia`, `configuracion_repeticiones`, `frecuencia_confirmada`, `ecuacion_predichos` |
-| `backend/app/routers/resistencia_medico.py` | Lo que fija el médico: modo y nivel de resistencia, repeticiones por sesión, ecuación para sexo "X" |
+| `backend/app/models/configuracion_dispositivo.py` | Tablas `configuracion_resistencia`, `frecuencia_confirmada`, `ecuacion_predichos` |
+| `backend/app/routers/resistencia_medico.py` | Lo que fija el médico: modo y nivel de resistencia, ecuación para sexo "X" |
 
 ---
 
@@ -575,7 +575,7 @@ guarda igual y la web lo muestra como "--".
 
 ### 5.6 Configuración: `GET /dispositivo/frecuencia` y sus confirmaciones
 
-Frecuencia, resistencia, repeticiones y valores predichos. El equipo la pide al entrar a Configuración
+Frecuencia, resistencia y valores predichos. El equipo la pide al entrar a Configuración
 y antes de cada entrenamiento, si tiene conexión.
 
 ```
@@ -599,11 +599,6 @@ GET /dispositivo/frecuencia?usuario=msalerno
     "nivel_manual": 3,
     "enviado": "2026-11-14"
   },
-  "repeticiones": {
-    "id": 4,
-    "repeticiones": 30,
-    "enviado": "2026-11-21"
-  },
   "predichos": {
     "fvc_predicha_L": 4.61,
     "pim_predicha_cmh2o": 111.4
@@ -611,7 +606,7 @@ GET /dispositivo/frecuencia?usuario=msalerno
 }
 ```
 
-Los objetos son independientes: el equipo guarda y confirma cada uno por separado.
+Los tres objetos son independientes: el equipo guarda y confirma cada uno por separado.
 
 - **`frecuencia`**: la vigente hoy. `dias_semana` va de 0 = lunes a 6 = domingo y
   `vigente_desde` es AAAA-MM-DD. **Se omite** si el médico todavía no fijó ninguna.
@@ -625,15 +620,6 @@ Los objetos son independientes: el equipo guarda y confirma cada uno por separad
   - `enviado`: AAAA-MM-DD en que el médico lo fijó.
   - **El nivel automático no viaja nunca:** lo calcula el equipo después de cada
     evaluación (S = 0,6·%PIM + 0,4·%FVC) y lo guarda sólo en su SD (`resistencia_auto`).
-- **`repeticiones`**: cuántas repeticiones (respiraciones contra la válvula) tiene que
-  hacer el paciente en cada sesión de entrenamiento; es lo que después vuelve en cada
-  sesión como `ciclos_objetivo`. **Se omite** si el médico todavía no las fijó; en ese
-  caso el equipo usa las suyas.
-  - `id`: cambia cada vez que el médico las modifica.
-  - `repeticiones`: entero de 1 a 30.
-  - `enviado`: AAAA-MM-DD en que el médico las fijó.
-  - **El firmware todavía no las lee**: hasta que lo haga, la web las muestra como
-    pendientes.
 - **`predichos`**: siempre viene, con los dos valores **como número** y en positivo. Se
   recalculan en cada pedido, así se actualizan solos con la edad. El que no se pueda
   calcular va en `null`; en ese caso el equipo no calcula el nivel automático, pero sigue
@@ -658,7 +644,6 @@ Los objetos son independientes: el equipo guarda y confirma cada uno por separad
 ```
 POST /dispositivo/frecuencia/confirmar     {"id_frecuencia": 5}
 POST /dispositivo/resistencia/confirmar    {"id_resistencia": 17}
-POST /dispositivo/repeticiones/confirmar   {"id_repeticiones": 4}
 ```
 
 Siempre contestan **200** `{"ok": true, "registrada": true}`. Si el id no existe (por
@@ -666,8 +651,8 @@ ejemplo, se borró la base del servidor) contestan igual 200 con `"registrada": 
 el equipo no se queda reintentando. Repetirlas no cambia nada. Los predichos no se
 confirman.
 
-En la web, el médico ve un punto amarillo al lado de "Modo de resistencia" y de
-"Repeticiones" hasta que el equipo confirma la configuración actual de cada una.
+En la web, el médico ve un punto amarillo al lado de "Modo de resistencia" hasta que el
+equipo confirma la configuración actual.
 
 ---
 
@@ -778,7 +763,6 @@ curl -X POST $B/dispositivo/verificar-pin -H "X-Device-Key: $K" -H "$J" \
 curl "$B/dispositivo/frecuencia?usuario=msalerno" -H "X-Device-Key: $K"
 curl -X POST $B/dispositivo/frecuencia/confirmar -H "X-Device-Key: $K" -H "$J" -d '{"id_frecuencia":3}'
 curl -X POST $B/dispositivo/resistencia/confirmar -H "X-Device-Key: $K" -H "$J" -d '{"id_resistencia":1}'
-curl -X POST $B/dispositivo/repeticiones/confirmar -H "X-Device-Key: $K" -H "$J" -d '{"id_repeticiones":1}'
 
 # --- Lado médico (lo mismo que hace el panel de la web) ---
 curl $B/medicos/me/dispositivo -H "Authorization: Bearer $T"                 # ver estado
@@ -791,8 +775,6 @@ curl -X POST $B/medicos/me/dispositivo/formatear -H "Authorization: Bearer $T" -
 curl -X POST $B/medicos/me/dispositivo/solicitudes/1/cancelar -H "Authorization: Bearer $T"  # cancelar
 curl -X POST $B/medicos/me/pacientes/1/resistencia -H "Authorization: Bearer $T" -H "$J" \
   -d '{"modo":"manual","nivel_manual":4}'                                    # fijar resistencia
-curl -X POST $B/medicos/me/pacientes/1/repeticiones -H "Authorization: Bearer $T" -H "$J" \
-  -d '{"repeticiones":30}'                                                    # fijar repeticiones
 curl $B/medicos/me/pacientes/1/configuracion-equipo -H "Authorization: Bearer $T"  # ver resistencia y predichos
 ```
 
@@ -810,9 +792,8 @@ y los errores con el formato de siempre de FastAPI (`{"detail": "..."}`).
 | `POST /medicos/me/dispositivo/formatear` | médico | Crea RESET; con `nombre_usuario_reemplazo` es "cambiar usuario" |
 | `POST /medicos/me/dispositivo/solicitudes/{id}/cancelar` | médico | Cancela un pedido PENDIENTE o ENTREGADA |
 | `GET /pacientes/me/dispositivo` | paciente | Código para conectar, última conexión y si el dispositivo tiene su PIN actual |
-| `GET /medicos/me/pacientes/{id}/configuracion-equipo` | médico | Resistencia y repeticiones vigentes, predichos y si el equipo ya los recibió |
+| `GET /medicos/me/pacientes/{id}/configuracion-equipo` | médico | Resistencia vigente, predichos y si el equipo ya la recibió |
 | `POST /medicos/me/pacientes/{id}/resistencia` | médico | Fija modo (`automatico`/`manual`) y `nivel_manual` (1–5); crea un id nuevo |
-| `POST /medicos/me/pacientes/{id}/repeticiones` | médico | Fija `repeticiones` por sesión (1–30); crea un id nuevo |
 | `GET /medicos/me/pacientes/{id}/entrenamientos` | médico | Lista de sesiones (más recientes primero, las sin fecha al final) |
 | `GET /medicos/me/pacientes/{id}/entrenamientos/{id_ent}` | médico | Una sesión con sus ciclos |
 | `GET /medicos/me/pacientes/{id}/entrenamientos/{id_ent}/senal` | médico | La señal del CSV (tiempo, presión, flujo); 404 si no hay |
