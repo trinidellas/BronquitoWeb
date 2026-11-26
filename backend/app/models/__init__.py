@@ -12,7 +12,13 @@ from app.models.configuracion_dispositivo import (
     FrecuenciaConfirmada,
 )
 from app.models.dispositivo import ArchivoDispositivo, Dispositivo, RegistroSync, SolicitudDispositivo
-from app.models.entrenamiento import CicloEntrenamiento, Entrenamiento, EntrenamientoCsv, EntrenamientoJson
+from app.models.entrenamiento import (
+    CicloEntrenamiento,
+    Entrenamiento,
+    EntrenamientoBorrado,
+    EntrenamientoCsv,
+    EntrenamientoJson,
+)
 from app.models.evaluacion import Evaluacion, EvaluacionMuestra
 from app.models.frecuencia_recomendada import FrecuenciaRecomendada
 from app.models.medico import Medico
@@ -32,6 +38,7 @@ __all__ = [
     "CicloEntrenamiento",  # tabla ciclos_entrenamiento (una fila por ciclo)
     "EntrenamientoCsv",  # tabla entrenamientos_csv (señal de cada sesión)
     "EntrenamientoJson",  # tabla entrenamientos_json (JSON original, respaldo)
+    "EntrenamientoBorrado",  # tabla entrenamientos_borrados (las que borró un médico)
     "Rutina",  # tabla rutina
     "NotaMedica",  # tabla notas_medicas
     # No es una de las 9 tablas del documento de arquitectura — es exclusiva

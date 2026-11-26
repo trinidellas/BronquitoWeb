@@ -122,6 +122,12 @@ export const api = {
       }),
     desvincularPaciente: (token: string, idPaciente: number) =>
       apiFetch<void>(`/medicos/me/pacientes/${idPaciente}`, { method: 'DELETE', token }),
+    /** Borra una evaluación con su curva y sus notas (no se puede deshacer). */
+    borrarEvaluacion: (token: string, idPaciente: number, idEvaluacion: number) =>
+      apiFetch<void>(`/medicos/me/pacientes/${idPaciente}/evaluaciones/${idEvaluacion}`, { method: 'DELETE', token }),
+    /** Borra una sesión de entrenamiento con sus ciclos, su señal y sus notas (no se puede deshacer). */
+    borrarEntrenamiento: (token: string, idPaciente: number, idEntrenamiento: number) =>
+      apiFetch<void>(`/medicos/me/pacientes/${idPaciente}/entrenamientos/${idEntrenamiento}`, { method: 'DELETE', token }),
     evaluacionesDe: (token: string, idPaciente: number) =>
       apiFetch<Evaluacion[]>(`/medicos/me/pacientes/${idPaciente}/evaluaciones`, { token }),
     /** Marca o desmarca mediciones como fallidas (no van en gráficos, CSV ni informe). */

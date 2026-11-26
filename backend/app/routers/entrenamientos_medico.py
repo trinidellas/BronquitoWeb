@@ -1,12 +1,13 @@
 """
 El visor de una sesión de entrenamiento (vista del médico): la sesión con
-sus ciclos y la señal cruda del CSV. El listado está en
+sus ciclos y la señal cruda del CSV, y borrarla. El listado está en
 `GET /medicos/me/pacientes/{id}/entrenamientos` (app/routers/medicos.py).
 """
 
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session
 
+from app.core.borrado_mediciones import borrar_entrenamiento_completo
 from app.core.database import get_db
 from app.core.deps import get_current_medico
 from app.core.entrenamientos_dispositivo import a_salida, archivos_con_senal, senal_de
@@ -57,3 +58,18 @@ def senal(
     if datos is None:
         raise HTTPException(status_code=404, detail="Señal no disponible.")
     return datos
+
+
+@router.delete("", status_code=204)
+def borrar(
+    id_paciente: int, id_entrenamiento: int,
+    medico: Medico = Depends(get_current_medico), db: Session = Depends(get_db),
+):
+    """
+    Borra la sesión con sus ciclos, su señal y sus notas. No se puede
+    deshacer. Si el equipo la vuelve a mandar al sincronizar, la web contesta
+    que la recibió pero no la crea de nuevo (ver app/core/borrado_mediciones.py).
+    """
+    entrenamiento = _entrenamiento(medico, id_paciente, id_entrenamiento, db)
+    borrar_entrenamiento_completo(db, entrenamiento, medico.id_medico)
+    db.commit()

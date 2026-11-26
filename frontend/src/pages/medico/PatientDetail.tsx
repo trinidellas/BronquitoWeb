@@ -217,6 +217,26 @@ export function PatientDetail({ paciente, onDesvincular }: PatientDetailProps) {
     setErrorOcultar(null)
   }, [tab, paciente.id])
 
+  /** Lo que se está por borrar: abre el modal de confirmación. */
+  const [aBorrar, setABorrar] = useState<MedicionABorrar | null>(null)
+
+  /**
+   * Borra esas mediciones de a una (si falla a mitad, lo que ya se borró
+   * desaparece de la tabla igual). El servidor recuerda el archivo de cada
+   * una, así no vuelve a aparecer si el dispositivo la manda de nuevo.
+   */
+  async function borrarMediciones(tipo: 'evaluacion' | 'entrenamiento', ids: number[]) {
+    for (const id of ids) {
+      if (tipo === 'evaluacion') {
+        await api.medico.borrarEvaluacion(token!, Number(paciente.id), id)
+        setEvaluaciones((actuales) => actuales.filter((e) => e.id_evaluacion !== id))
+      } else {
+        await api.medico.borrarEntrenamiento(token!, Number(paciente.id), id)
+        setEntrenamientos((actuales) => actuales.filter((e) => e.id_entrenamiento !== id))
+      }
+    }
+  }
+
   /**
    * El ojito de cada fila: marca (o desmarca) esas mediciones como fallidas.
    * Se ve al toque y, si el servidor no lo guarda, vuelve como estaba.
@@ -402,7 +422,7 @@ export function PatientDetail({ paciente, onDesvincular }: PatientDetailProps) {
                     <thead>
                       <tr>
                         <th className="celda-ojo">
-                          <span className="sr-only">En gráficos e informe</span>
+                          <span className="sr-only">Ocultar o borrar</span>
                         </th>
                         <th>Fecha</th>
                         <th>Hora</th>
@@ -422,13 +442,21 @@ export function PatientDetail({ paciente, onDesvincular }: PatientDetailProps) {
                         return (
                           <tr key={sesion.fecha_hora} className={oculta ? 'fila-oculta' : undefined}>
                             <td className="celda-ojo">
-                              <BotonOcultar
-                                oculta={oculta}
-                                que="esta evaluación"
-                                onClick={() =>
-                                  cambiarOculta('evaluacion', deLaSesion.map((e) => e.id_evaluacion), !oculta)
-                                }
-                              />
+                              <div className="fila-iconos">
+                                <BotonOcultar
+                                  oculta={oculta}
+                                  que="esta evaluación"
+                                  onClick={() =>
+                                    cambiarOculta('evaluacion', deLaSesion.map((e) => e.id_evaluacion), !oculta)
+                                  }
+                                />
+                                <BotonBorrar
+                                  que="esta evaluación"
+                                  onClick={() =>
+                                    setABorrar({ tipo: 'evaluacion', fechaHora: sesion.fecha_hora, evaluaciones: deLaSesion })
+                                  }
+                                />
+                              </div>
                             </td>
                             <td>{formatearFecha(sesion.fecha_hora)}</td>
                             <td>{formatearHora(sesion.fecha_hora)}</td>
@@ -504,7 +532,7 @@ export function PatientDetail({ paciente, onDesvincular }: PatientDetailProps) {
                     <thead>
                       <tr>
                         <th className="celda-ojo">
-                          <span className="sr-only">En gráficos e informe</span>
+                          <span className="sr-only">Ocultar o borrar</span>
                         </th>
                         <th>Fecha</th>
                         <th>Hora</th>
@@ -520,11 +548,17 @@ export function PatientDetail({ paciente, onDesvincular }: PatientDetailProps) {
                       {entrenamientos.map((e) => (
                         <tr key={e.id_entrenamiento} className={e.oculta ? 'fila-oculta' : undefined}>
                           <td className="celda-ojo">
-                            <BotonOcultar
-                              oculta={e.oculta ?? false}
-                              que="esta sesión"
-                              onClick={() => cambiarOculta('entrenamiento', [e.id_entrenamiento], !e.oculta)}
-                            />
+                            <div className="fila-iconos">
+                              <BotonOcultar
+                                oculta={e.oculta ?? false}
+                                que="esta sesión"
+                                onClick={() => cambiarOculta('entrenamiento', [e.id_entrenamiento], !e.oculta)}
+                              />
+                              <BotonBorrar
+                                que="esta sesión"
+                                onClick={() => setABorrar({ tipo: 'entrenamiento', entrenamiento: e })}
+                              />
+                            </div>
                           </td>
                           <td>{fmtEntrenamiento.fecha(e, false)}</td>
                           <td>{fmtEntrenamiento.hora(e)}</td>
@@ -599,6 +633,14 @@ export function PatientDetail({ paciente, onDesvincular }: PatientDetailProps) {
         />
       )}
 
+      {aBorrar && (
+        <BorrarMedicionModal
+          medicion={aBorrar}
+          onBorrar={borrarMediciones}
+          onClose={() => setABorrar(null)}
+        />
+      )}
+
       {confirmarDesvinculo && (
         <Modal
           titulo="Desvincular paciente"
@@ -659,5 +701,109 @@ function NotaOcultas() {
       Las filas en gris están ocultas: no aparecen en los gráficos, el CSV ni el informe. Tocá el ojo para volver a
       mostrarlas.
     </p>
+  )
+}
+
+/** Lo que se va a borrar: una fila de evaluaciones (espirometría y/o PIM de una sesión) o un entrenamiento. */
+type MedicionABorrar =
+  | { tipo: 'evaluacion'; fechaHora: string; evaluaciones: Evaluacion[] }
+  | { tipo: 'entrenamiento'; entrenamiento: Entrenamiento }
+
+/** El tacho de cada fila: abre la confirmación para borrar la medición. */
+function BotonBorrar({ que, onClick }: { que: string; onClick: () => void }) {
+  return (
+    <button
+      type="button"
+      className="btn-ojo btn-borrar-fila"
+      onClick={onClick}
+      aria-label={`Borrar ${que}`}
+      title="Borrar (no se puede deshacer)"
+    >
+      <TrashIcon className="icon-16" />
+    </button>
+  )
+}
+
+const NOMBRE_EVALUACION: Record<Evaluacion['tipo'], string> = { ESPIROMETRIA: 'Espirometría', PIM_PEM: 'PIM' }
+
+/**
+ * Confirmación antes de borrar. En una sesión con espirometría y PIM se elige
+ * cuáles (vienen las dos marcadas). Avisa que no se puede deshacer y que el
+ * dispositivo no la vuelve a cargar aunque la mande de nuevo.
+ */
+function BorrarMedicionModal({
+  medicion,
+  onBorrar,
+  onClose,
+}: {
+  medicion: MedicionABorrar
+  onBorrar: (tipo: 'evaluacion' | 'entrenamiento', ids: number[]) => Promise<void>
+  onClose: () => void
+}) {
+  const opciones =
+    medicion.tipo === 'evaluacion'
+      ? medicion.evaluaciones.map((e) => ({ id: e.id_evaluacion, nombre: NOMBRE_EVALUACION[e.tipo] }))
+      : [{ id: medicion.entrenamiento.id_entrenamiento, nombre: 'Entrenamiento' }]
+  const [elegidas, setElegidas] = useState<number[]>(opciones.map((o) => o.id))
+  const [borrando, setBorrando] = useState(false)
+  const [error, setError] = useState<string | null>(null)
+
+  const fechaHora = medicion.tipo === 'evaluacion' ? medicion.fechaHora : medicion.entrenamiento.fecha_hora
+  const cuando = fechaHora ? `del ${formatearFecha(fechaHora)} a las ${formatearHora(fechaHora)}` : 'sin fecha'
+  const titulo = medicion.tipo === 'evaluacion' ? 'Borrar evaluación' : 'Borrar entrenamiento'
+
+  async function confirmar() {
+    setBorrando(true)
+    setError(null)
+    try {
+      await onBorrar(medicion.tipo, elegidas)
+      onClose()
+    } catch (err) {
+      setError(err instanceof ApiError ? err.message : 'No se pudo borrar. Probá de nuevo.')
+      setBorrando(false)
+    }
+  }
+
+  return (
+    <Modal
+      titulo={titulo}
+      wide
+      onClose={borrando ? () => {} : onClose}
+      acciones={
+        <>
+          <button className="btn btn-outline" onClick={onClose} disabled={borrando}>
+            Cancelar
+          </button>
+          <button className="btn btn-red" onClick={confirmar} disabled={borrando || elegidas.length === 0}>
+            {borrando ? 'Borrando…' : 'Borrar'}
+          </button>
+        </>
+      }
+    >
+      <p>
+        {medicion.tipo === 'evaluacion' ? 'Sesión de evaluación' : 'Sesión de entrenamiento'} {cuando}. Se borran sus
+        valores, su señal y sus notas, y deja de aparecer en los gráficos y el informe.{' '}
+        <strong>No se puede deshacer.</strong> Si el dispositivo la vuelve a mandar al sincronizar, la web no la carga de
+        nuevo.
+      </p>
+      {opciones.length > 1 && (
+        <div className="borrar-opciones" role="group" aria-label="Qué borrar">
+          {opciones.map((o) => (
+            <label key={o.id} className="field-check">
+              <input
+                type="checkbox"
+                checked={elegidas.includes(o.id)}
+                onChange={(e) =>
+                  setElegidas((actuales) => (e.target.checked ? [...actuales, o.id] : actuales.filter((id) => id !== o.id)))
+                }
+                disabled={borrando}
+              />
+              <span>{o.nombre}</span>
+            </label>
+          ))}
+        </div>
+      )}
+      {error && <div className="auth-alert error">{error}</div>}
+    </Modal>
   )
 }

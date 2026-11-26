@@ -495,6 +495,7 @@ del `.csv`. Un pedido por prueba.
 |---|---|---|
 | 200 | `{"ok": true, "estado": "nueva", "visible": true, "id_evaluacion": 29}` | Marcar `"sincronizado": true` |
 | 200 | `{"ok": true, "estado": "repetida", ...}` | Ya había llegado (no se duplica): marcarla igual |
+| 200 | `{"ok": true, "estado": "borrada", "visible": false, "id_evaluacion": null}` | Un médico la borró de la web: marcarla igual (no se vuelve a crear) |
 | 404 | `{"ok": false, "error": "usuario_no_asignado"}` / `sin_paciente_asignado` | No seguir subiendo: sincronizar de nuevo |
 | 400 | `{"ok": false, "error": "datos_invalidos"}` | A esa prueba le pasa algo: dejarla pendiente y seguir con las demás |
 
@@ -511,6 +512,11 @@ Qué hace la web con cada prueba:
   `"valida": false` y la PIM en cero que guarda el equipo sin sensor de PIM.
 - **Repetidas:** se reconocen por la huella del contenido (sin `"sincronizado"`), así que
   da igual si se corta la luz antes de marcarla.
+- **Borradas por un médico:** la web se acuerda del nombre del archivo (en
+  `archivos_dispositivo`, con `motivo_oculta` = `borrada_por_medico`). Si el equipo la vuelve
+  a mandar, contesta 200 con `"estado": "borrada"` y no la crea de nuevo, así el equipo la
+  marca como subida y no la manda más. Se reconoce por el nombre, que el equipo no repite
+  nunca.
 
 ### 5.5 bis `POST /dispositivo/entrenamientos` y `/dispositivo/entrenamientos/csv`
 
@@ -541,6 +547,9 @@ POST /dispositivo/entrenamientos/csv?usuario=msalerno&archivo=ent_20261114_15300
 
 - Se guardan por `archivo`: si llega de nuevo, **se reemplaza** (no se duplica). El CSV
   puede llegar antes que el JSON o repetido.
+- **Borradas por un médico:** la web anota el nombre en `entrenamientos_borrados`. Si el
+  equipo la vuelve a mandar (el JSON o el CSV), contesta 200 con `"estado": "borrado"` y no
+  guarda nada, así el equipo la marca como subida y no la manda más.
 - La sesión cuenta como recibida cuando llegaron los dos. Una sesión puede no tener CSV:
   la web muestra "Señal no disponible".
 - El JSON se reparte en tablas planas (sin anidar) y además se guarda **completo, tal como
@@ -565,6 +574,7 @@ POST /dispositivo/entrenamientos/csv?usuario=msalerno&archivo=ent_20261114_15300
 |---|---|---|
 | 200 (JSON) | `{"ok": true, "estado": "nuevo", "id_entrenamiento": 32, "senal_recibida": true}` | Marcar el JSON como subido |
 | 200 (CSV) | `{"ok": true, "estado": "reemplazado", "id_entrenamiento": 32, "entrenamiento_recibido": true}` | Marcar el CSV como subido (`id_entrenamiento` null si el JSON todavía no llegó) |
+| 200 (JSON o CSV) | `{"ok": true, "estado": "borrado", "id_entrenamiento": null, ...}` | Un médico la borró de la web: marcarla igual (no se guarda) |
 | 400 | `datos_invalidos` | Esa sesión queda pendiente; seguir con la siguiente |
 | 404 | `usuario_no_asignado` / `sin_paciente_asignado` | Dejar de subir y sincronizar de nuevo |
 
@@ -797,6 +807,8 @@ y los errores con el formato de siempre de FastAPI (`{"detail": "..."}`).
 | `GET /medicos/me/pacientes/{id}/entrenamientos` | médico | Lista de sesiones (más recientes primero, las sin fecha al final) |
 | `GET /medicos/me/pacientes/{id}/entrenamientos/{id_ent}` | médico | Una sesión con sus ciclos |
 | `GET /medicos/me/pacientes/{id}/entrenamientos/{id_ent}/senal` | médico | La señal del CSV (tiempo, presión, flujo); 404 si no hay |
+| `DELETE /medicos/me/pacientes/{id}/entrenamientos/{id_ent}` | médico | Borra la sesión (ciclos, señal, notas); si el equipo la reenvía, no vuelve |
+| `DELETE /medicos/me/pacientes/{id}/evaluaciones/{id_eval}` | médico | Borra la evaluación (curva, notas); si el equipo la reenvía, no vuelve |
 | `PUT /medicos/me/pacientes/{id}/ecuacion-predichos` | médico | Sólo sexo "X": `{"sexo_ecuacion": "M"}` o `"F"` |
 
 Reglas del lado médico:

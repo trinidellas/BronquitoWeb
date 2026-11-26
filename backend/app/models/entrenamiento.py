@@ -181,3 +181,23 @@ class EntrenamientoCsv(Base):
     archivo: Mapped[str] = mapped_column(String(80))
     csv: Mapped[str] = mapped_column(Text().with_variant(LONGTEXT(), "mysql"))
     recibido_en: Mapped[datetime] = mapped_column(DateTime)
+
+
+class EntrenamientoBorrado(Base):
+    """
+    TABLA ENTRENAMIENTOS_BORRADOS — las sesiones que un médico borró desde la
+    web. Sólo queda el nombre del archivo: si el equipo la vuelve a mandar
+    (ej. no pudo marcarla como subida), la web contesta que la recibió pero no
+    la vuelve a crear, así el equipo la marca y no la manda más. El equipo no
+    repite nunca un nombre (ver la ESP, "IDS SIN HORA").
+    """
+
+    __tablename__ = "entrenamientos_borrados"
+    __table_args__ = (UniqueConstraint("id_paciente", "archivo", name="uq_entrenamiento_borrado"),)
+
+    id_borrado: Mapped[int] = mapped_column(primary_key=True, autoincrement=True)
+    id_paciente: Mapped[int] = mapped_column(ForeignKey("usuarios.id_paciente"), index=True)
+    archivo: Mapped[str] = mapped_column(String(80))
+    # Quién la borró y cuándo (UTC, sin zona).
+    id_medico: Mapped[int] = mapped_column(ForeignKey("medicos.id_medico"))
+    borrado_en: Mapped[datetime] = mapped_column(DateTime)

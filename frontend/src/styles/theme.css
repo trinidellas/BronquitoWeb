@@ -994,6 +994,34 @@ td.celda-ojo {
   background: #eef3f4;
 }
 
+/* El ojo y el tacho, uno al lado del otro. */
+.fila-iconos {
+  display: flex;
+  gap: 6px;
+}
+
+.btn-borrar-fila {
+  color: var(--ink-soft);
+}
+
+.btn-borrar-fila:hover {
+  color: var(--bad);
+  border-color: var(--bad);
+  background: var(--bad-bg);
+}
+
+/* Modal de borrar: qué mediciones de la sesión (espirometría, PIM). */
+.borrar-opciones {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px 22px;
+  margin: 0 0 12px;
+}
+
+.borrar-opciones .field-check {
+  margin: 0;
+}
+
 /* La fila se ve en gris, pero el ojo no, así se encuentra para volver a mostrarla. */
 tr.fila-oculta td {
   background: #f4f7f8;
@@ -2113,6 +2141,149 @@ button.cal-ribbon {
 .settings-card {
   max-width: 700px;
   margin: 0 auto;
+}
+
+/* ---------- Guardar en Configuración: que se note (pages/configuracion/ConfiguracionPage.tsx) ---------- */
+.btn.btn-guardado,
+.btn.btn-guardado:disabled {
+  background: var(--good);
+  color: #fff;
+}
+
+/* El campo que se acaba de guardar se ilumina en verde y se apaga solo. */
+@keyframes campo-guardado {
+  0%,
+  40% {
+    border-color: var(--good);
+    background: var(--good-bg);
+    box-shadow: 0 0 0 3px rgba(31, 157, 100, 0.35);
+  }
+  100% {
+    box-shadow: 0 0 0 0 rgba(31, 157, 100, 0);
+  }
+}
+
+@keyframes bloque-guardado {
+  0%,
+  40% {
+    background: var(--good-bg);
+    box-shadow: 0 0 0 3px rgba(31, 157, 100, 0.35);
+  }
+  100% {
+    background: transparent;
+    box-shadow: 0 0 0 0 rgba(31, 157, 100, 0);
+  }
+}
+
+.campo-guardado input:not([type='checkbox']),
+.campo-guardado select {
+  animation: campo-guardado 3s ease-out;
+}
+
+.enfermedades-field.campo-guardado,
+.field-check.campo-guardado {
+  border-radius: 10px;
+  animation: bloque-guardado 3s ease-out;
+}
+
+/* Aviso flotante (components/ui/AvisoFlotante.tsx): abajo, donde quedó la persona al tocar "Guardar". */
+.aviso-flotante {
+  position: fixed;
+  left: 50%;
+  bottom: 24px;
+  transform: translateX(-50%);
+  z-index: 70;
+  display: flex;
+  align-items: flex-start;
+  gap: 12px;
+  width: min(440px, calc(100vw - 32px));
+  padding: 14px 14px 14px 16px;
+  border-radius: 14px;
+  border: 1.5px solid;
+  box-shadow: 0 12px 30px rgba(10, 60, 70, 0.22);
+  font-size: 14px;
+  text-align: left;
+  animation: aviso-entra 0.25s ease-out;
+}
+
+.aviso-flotante.ok {
+  background: var(--good-bg);
+  border-color: var(--good);
+  color: #146240;
+}
+
+.aviso-flotante.error {
+  background: var(--bad-bg);
+  border-color: var(--bad);
+  color: #9a1a3c;
+}
+
+.aviso-flotante.info {
+  background: var(--teal-pale);
+  border-color: var(--teal);
+  color: var(--teal-deep);
+}
+
+.aviso-flotante-icono {
+  flex: none;
+  width: 22px;
+  height: 22px;
+  margin-top: 1px;
+}
+
+.aviso-flotante-texto {
+  flex: 1;
+  min-width: 0;
+}
+
+.aviso-flotante-titulo {
+  font-weight: 800;
+}
+
+.aviso-flotante-detalle {
+  margin-top: 2px;
+  font-size: 13px;
+  font-weight: 600;
+  overflow-wrap: anywhere;
+}
+
+.aviso-flotante-cerrar {
+  flex: none;
+  width: 28px;
+  height: 28px;
+  margin: -4px -4px 0 0;
+  border: none;
+  border-radius: 50%;
+  background: transparent;
+  color: inherit;
+  font-size: 20px;
+  line-height: 1;
+  cursor: pointer;
+}
+
+.aviso-flotante-cerrar:hover {
+  background: rgba(0, 0, 0, 0.06);
+}
+
+@keyframes aviso-entra {
+  from {
+    opacity: 0;
+    transform: translate(-50%, 12px);
+  }
+  to {
+    opacity: 1;
+    transform: translate(-50%, 0);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .aviso-flotante,
+  .campo-guardado input:not([type='checkbox']),
+  .campo-guardado select,
+  .enfermedades-field.campo-guardado,
+  .field-check.campo-guardado {
+    animation: none;
+  }
 }
 
 .settings-card h2 {

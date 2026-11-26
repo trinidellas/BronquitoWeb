@@ -30,7 +30,13 @@ from datetime import datetime
 from sqlalchemy.orm import Session
 
 from app.core.dispositivo import ahora_utc
-from app.models.entrenamiento import CicloEntrenamiento, Entrenamiento, EntrenamientoCsv, EntrenamientoJson
+from app.models.entrenamiento import (
+    CicloEntrenamiento,
+    Entrenamiento,
+    EntrenamientoBorrado,
+    EntrenamientoCsv,
+    EntrenamientoJson,
+)
 from app.models.paciente import Paciente
 
 ESTADOS = ("completa", "incompleta", "interrumpida")
@@ -171,7 +177,13 @@ def guardar_entrenamiento(
     le contesta al equipo: estado "nuevo" o "reemplazado", el id en la web y
     si ya llegó la señal. `id_entrenamiento` y `recibido_en` sólo los usa la
     migración, para no cambiarle el id a las sesiones que ya estaban.
+
+    Si un médico la había borrado, no se guarda: estado "borrado" (el equipo
+    igual la marca como subida y no la manda más).
     """
+    if esta_borrado(db, paciente.id_paciente, archivo):
+        return {"estado": "borrado", "id_entrenamiento": None, "senal_recibida": False}
+
     entrenamiento = (
         db.query(Entrenamiento)
         .filter(Entrenamiento.id_paciente == paciente.id_paciente, Entrenamiento.archivo == archivo)
@@ -308,8 +320,12 @@ def leer_senal(csv: str | None) -> dict | None:
 def guardar_csv(db: Session, paciente: Paciente, archivo: str, csv: str) -> dict:
     """
     Guarda (o reemplaza) la señal de la sesión `archivo`. Puede llegar antes
-    que el JSON: queda guardada y se asocia sola por el nombre.
+    que el JSON: queda guardada y se asocia sola por el nombre. Si un médico
+    borró esa sesión, no se guarda (estado "borrado").
     """
+    if esta_borrado(db, paciente.id_paciente, archivo):
+        return {"estado": "borrado", "id_entrenamiento": None, "entrenamiento_recibido": False}
+
     fila = _csv_de(db, paciente.id_paciente, archivo)
     estado = "reemplazado" if fila else "nuevo"
     if fila is None:
@@ -329,6 +345,34 @@ def guardar_csv(db: Session, paciente: Paciente, archivo: str, csv: str) -> dict
         "id_entrenamiento": entrenamiento.id_entrenamiento if entrenamiento else None,
         "entrenamiento_recibido": entrenamiento is not None,
     }
+
+
+def esta_borrado(db: Session, id_paciente: int, archivo: str) -> bool:
+    """Si un médico borró la sesión `archivo` de ese paciente."""
+    return (
+        db.query(EntrenamientoBorrado.id_borrado)
+        .filter(EntrenamientoBorrado.id_paciente == id_paciente, EntrenamientoBorrado.archivo == archivo)
+        .first()
+    ) is not None
+
+
+def borrar_entrenamiento(db: Session, entrenamiento: Entrenamiento, id_medico: int) -> None:
+    """
+    Borra la sesión con sus ciclos, su JSON y su señal, y anota el nombre del
+    archivo en `entrenamientos_borrados` para no volver a crearla si el equipo
+    la manda de nuevo. Las notas y la marca de oculta las borra quien llama.
+    """
+    csv = _csv_de(db, entrenamiento.id_paciente, entrenamiento.archivo)
+    if csv is not None:
+        db.delete(csv)
+    if not esta_borrado(db, entrenamiento.id_paciente, entrenamiento.archivo):
+        db.add(EntrenamientoBorrado(
+            id_paciente=entrenamiento.id_paciente,
+            archivo=entrenamiento.archivo,
+            id_medico=id_medico,
+            borrado_en=ahora_utc(),
+        ))
+    db.delete(entrenamiento)  # los ciclos y el JSON se van con la sesión (cascade)
 
 
 def _csv_de(db: Session, id_paciente: int, archivo: str) -> EntrenamientoCsv | None:

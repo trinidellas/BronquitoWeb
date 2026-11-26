@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useCallback, useEffect, useState } from 'react'
 import type { FormEvent } from 'react'
 import { Link } from 'react-router-dom'
 
@@ -18,6 +18,8 @@ import {
   normalizarNombreUsuario,
 } from '../../auth/nombreUsuario'
 import { useSession } from '../../auth/session'
+import { AvisoFlotante } from '../../components/ui/AvisoFlotante'
+import type { Aviso } from '../../components/ui/AvisoFlotante'
 import { Modal } from '../../components/ui/Modal'
 import { PasswordField } from '../../components/ui/PasswordField'
 
@@ -36,10 +38,81 @@ function enfermedadesIniciales(enfermedades: string | null): EnfermedadPreexiste
   return enfermedades.split(', ').filter((enfermedad): enfermedad is EnfermedadPreexistente => opciones.has(enfermedad as EnfermedadPreexistente))
 }
 
-function Mensaje({ error, exito }: { error: string | null; exito: string | null }) {
-  if (error) return <div className="auth-alert error">{error}</div>
-  if (exito) return <div className="auth-alert success">{exito}</div>
-  return null
+/** Cómo se nombra cada campo en el aviso de "Cambios guardados". */
+const ETIQUETA_CAMPO: Record<string, string> = {
+  nombre: 'el nombre',
+  apellido: 'el apellido',
+  usuario: 'el nombre de usuario',
+  mail: 'el mail',
+  contrasena: 'la contraseña',
+  altura: 'la altura',
+  peso: 'el peso',
+  nacimiento: 'la fecha de nacimiento',
+  sexo: 'el sexo',
+  enfermedades: 'las enfermedades preexistentes',
+  fumador: 'si fumás',
+  pin: 'el PIN',
+}
+
+/** ["el nombre", "el mail", "el PIN"] -> "el nombre, el mail y el PIN". */
+function enumerar(partes: string[]): string {
+  return partes.length <= 1 ? partes.join('') : `${partes.slice(0, -1).join(', ')} y ${partes[partes.length - 1]}`
+}
+
+/** Cuánto quedan resaltados los campos guardados y el botón en "Cambios guardados". */
+const RESALTADO_MS = 3000
+
+/**
+ * Que se note que se guardó: un aviso flotante abajo (donde quedó la persona
+ * al tocar el botón) que dice qué cambió, los campos que cambiaron resaltados
+ * un momento y el botón en "Cambios guardados". Los errores, en el mismo aviso.
+ */
+function useGuardado() {
+  const [aviso, setAviso] = useState<Aviso | null>(null)
+  const [resaltados, setResaltados] = useState<Set<string>>(new Set())
+  const [recienGuardado, setRecienGuardado] = useState(false)
+  // Sube con cada guardado: así, si se guarda dos veces seguidas, el resaltado vuelve a durar entero.
+  const [vez, setVez] = useState(0)
+
+  useEffect(() => {
+    if (vez === 0) return
+    const t = window.setTimeout(() => {
+      setResaltados(new Set())
+      setRecienGuardado(false)
+    }, RESALTADO_MS)
+    return () => window.clearTimeout(t)
+  }, [vez])
+
+  const cerrarAviso = useCallback(() => setAviso(null), [])
+
+  return {
+    aviso,
+    cerrarAviso,
+    recienGuardado,
+    error: (detalle: string) => setAviso({ tipo: 'error', titulo: 'No se guardaron los cambios', detalle }),
+    sinCambios: () => setAviso({ tipo: 'info', titulo: 'No había cambios para guardar' }),
+    guardado: (campos: string[]) => {
+      setAviso({
+        tipo: 'ok',
+        titulo: 'Cambios guardados',
+        detalle: `Actualizaste ${enumerar(campos.map((c) => ETIQUETA_CAMPO[c] ?? c))}.`,
+      })
+      setResaltados(new Set(campos))
+      setRecienGuardado(true)
+      setVez((v) => v + 1)
+    },
+    /** La clase de un campo: la de siempre, más el resaltado si se acaba de guardar. */
+    clase: (campo: string, base: string) => (resaltados.has(campo) ? `${base} campo-guardado` : base),
+  }
+}
+
+/** El botón de guardar: "Guardando…", y un momento "Cambios guardados" en verde. */
+function BotonGuardar({ enviando, recienGuardado }: { enviando: boolean; recienGuardado: boolean }) {
+  return (
+    <button className={`btn btn-teal btn-block${recienGuardado ? ' btn-guardado' : ''}`} disabled={enviando} type="submit">
+      {enviando ? 'Guardando…' : recienGuardado ? '✓ Cambios guardados' : 'Guardar cambios'}
+    </button>
+  )
 }
 
 export function ConfiguracionPage() {
@@ -71,27 +144,36 @@ function ConfiguracionMedico({ datos, token }: { datos: MedicoPerfil; token: str
   const [confirmarCambio, setConfirmarCambio] = useState(false)
   const [contrasena, setContrasena] = useState('')
   const [contrasena2, setContrasena2] = useState('')
-  const [error, setError] = useState<string | null>(null)
-  const [exito, setExito] = useState<string | null>(null)
   const [enviando, setEnviando] = useState(false)
+  const g = useGuardado()
 
   async function onSubmit(event: FormEvent) {
     event.preventDefault()
-    setError(null)
-    setExito(null)
+    g.cerrarAviso()
     if (/\d/.test(nombre) || /\d/.test(apellido)) {
-      setError('El nombre y el apellido no pueden contener números.')
+      g.error('El nombre y el apellido no pueden contener números.')
       return
     }
     if (cambiarContrasena) {
       if (contrasena.length < 8) {
-        setError('La contraseña tiene que tener al menos 8 caracteres.')
+        g.error('La contraseña tiene que tener al menos 8 caracteres.')
         return
       }
       if (contrasena !== contrasena2) {
-        setError('Las contraseñas no coinciden.')
+        g.error('Las contraseñas no coinciden.')
         return
       }
+    }
+
+    const cambios = [
+      nombre.trim() !== datos.nombre && 'nombre',
+      apellido.trim() !== datos.apellido && 'apellido',
+      usuario.trim() !== datos.usuario && 'mail',
+      cambiarContrasena && 'contrasena',
+    ].filter((c): c is string => Boolean(c))
+    if (cambios.length === 0) {
+      g.sinCambios()
+      return
     }
 
     const body: MedicoPerfilUpdateBody = {
@@ -108,9 +190,9 @@ function ConfiguracionMedico({ datos, token }: { datos: MedicoPerfil; token: str
       setContrasena('')
       setContrasena2('')
       setCambiarContrasena(false)
-      setExito('Tus datos se guardaron correctamente.')
+      g.guardado(cambios)
     } catch (err) {
-      setError(err instanceof ApiError ? err.message : 'No se pudieron guardar los cambios.')
+      g.error(err instanceof ApiError ? err.message : 'Probá de nuevo en un momento.')
     } finally {
       setEnviando(false)
     }
@@ -118,19 +200,18 @@ function ConfiguracionMedico({ datos, token }: { datos: MedicoPerfil; token: str
 
   return (
     <>
-      <Mensaje error={error} exito={exito} />
       <form onSubmit={onSubmit}>
         <div className="auth-row">
-          <div className="field">
+          <div className={g.clase('nombre', 'field')}>
             <label htmlFor="config-nombre">Nombre</label>
             <input id="config-nombre" value={nombre} onChange={(event) => setNombre(event.target.value)} required />
           </div>
-          <div className="field">
+          <div className={g.clase('apellido', 'field')}>
             <label htmlFor="config-apellido">Apellido</label>
             <input id="config-apellido" value={apellido} onChange={(event) => setApellido(event.target.value)} required />
           </div>
         </div>
-        <div className="field">
+        <div className={g.clase('mail', 'field')}>
           <label htmlFor="config-mail">Mail</label>
           <input id="config-mail" type="email" value={usuario} onChange={(event) => setUsuario(event.target.value)} required />
         </div>
@@ -160,10 +241,9 @@ function ConfiguracionMedico({ datos, token }: { datos: MedicoPerfil; token: str
           </button>
         )}
 
-        <button className="btn btn-teal btn-block" disabled={enviando} type="submit">
-          {enviando ? 'Guardando…' : 'Guardar cambios'}
-        </button>
+        <BotonGuardar enviando={enviando} recienGuardado={g.recienGuardado} />
       </form>
+      <AvisoFlotante aviso={g.aviso} onCerrar={g.cerrarAviso} />
 
       {confirmarCambio && (
         <Modal
@@ -209,9 +289,8 @@ function ConfiguracionPaciente({ datos, token }: { datos: PacientePerfil; token:
   const [confirmarCambio, setConfirmarCambio] = useState(false)
   const [pin, setPin] = useState('')
   const [pin2, setPin2] = useState('')
-  const [error, setError] = useState<string | null>(null)
-  const [exito, setExito] = useState<string | null>(null)
   const [enviando, setEnviando] = useState(false)
+  const g = useGuardado()
 
   function cambiarEnfermedad(enfermedad: EnfermedadPreexistente, seleccionada: boolean) {
     setEnfermedades((actuales) =>
@@ -221,30 +300,49 @@ function ConfiguracionPaciente({ datos, token }: { datos: PacientePerfil; token:
 
   async function onSubmit(event: FormEvent) {
     event.preventDefault()
-    setError(null)
-    setExito(null)
+    g.cerrarAviso()
     if (/\d/.test(nombre) || /\d/.test(apellido)) {
-      setError('El nombre y el apellido no pueden contener números.')
+      g.error('El nombre y el apellido no pueden contener números.')
       return
     }
     const errorUsuario = errorNombreUsuario(nombreUsuario.trim())
     if (errorUsuario) {
-      setError(errorUsuario)
+      g.error(errorUsuario)
       return
     }
     if (enfermedades.length === 0) {
-      setError('Elegí al menos una enfermedad preexistente.')
+      g.error('Elegí al menos una enfermedad preexistente.')
       return
     }
     if (cambiarPin) {
       if (!/^\d{4}$/.test(pin)) {
-        setError('El PIN tiene que ser de 4 dígitos.')
+        g.error('El PIN tiene que ser de 4 dígitos.')
         return
       }
       if (pin !== pin2) {
-        setError('Los PIN no coinciden.')
+        g.error('Los PIN no coinciden.')
         return
       }
+    }
+
+    const mismasEnfermedades =
+      [...enfermedades].sort().join('|') === [...enfermedadesIniciales(datos.enfermedades)].sort().join('|')
+    const cambios = [
+      nombre.trim() !== (datos.nombre ?? '') && 'nombre',
+      apellido.trim() !== (datos.apellido ?? '') && 'apellido',
+      nombreUsuario.trim() !== datos.nombre_usuario && 'usuario',
+      email.trim() !== (datos.email ?? '') && 'mail',
+      Number(altura) !== datos.altura_cm && 'altura',
+      Number(peso) !== datos.peso_kg && 'peso',
+      nacimiento !== datos.fecha_nacimiento && 'nacimiento',
+      sexo !== datos.sexo && 'sexo',
+      !mismasEnfermedades && 'enfermedades',
+      fumador !== datos.fumador && 'fumador',
+      cambiarPin && 'pin',
+    ].filter((c): c is string => Boolean(c))
+    if (cambios.length === 0) {
+      g.sinCambios()
+      return
     }
 
     const body: PacientePerfilUpdateBody = {
@@ -268,9 +366,9 @@ function ConfiguracionPaciente({ datos, token }: { datos: PacientePerfil; token:
       setPin('')
       setPin2('')
       setCambiarPin(false)
-      setExito('Tus datos se guardaron correctamente.')
+      g.guardado(cambios)
     } catch (err) {
-      setError(err instanceof ApiError ? err.message : 'No se pudieron guardar los cambios.')
+      g.error(err instanceof ApiError ? err.message : 'Probá de nuevo en un momento.')
     } finally {
       setEnviando(false)
     }
@@ -278,20 +376,19 @@ function ConfiguracionPaciente({ datos, token }: { datos: PacientePerfil; token:
 
   return (
     <>
-      <Mensaje error={error} exito={exito} />
       <form onSubmit={onSubmit}>
         <div className="auth-row">
-          <div className="field">
+          <div className={g.clase('nombre', 'field')}>
             <label htmlFor="config-nombre">Nombre</label>
             <input id="config-nombre" value={nombre} onChange={(event) => setNombre(event.target.value)} required />
           </div>
-          <div className="field">
+          <div className={g.clase('apellido', 'field')}>
             <label htmlFor="config-apellido">Apellido</label>
             <input id="config-apellido" value={apellido} onChange={(event) => setApellido(event.target.value)} required />
           </div>
         </div>
         <div className="auth-row">
-          <div className="field">
+          <div className={g.clase('usuario', 'field')}>
             <label htmlFor="config-usuario">Nombre de usuario</label>
             <input
               id="config-usuario"
@@ -305,27 +402,27 @@ function ConfiguracionPaciente({ datos, token }: { datos: PacientePerfil; token:
             />
             <p className="field-hint">{AYUDA_NOMBRE_USUARIO}</p>
           </div>
-          <div className="field">
+          <div className={g.clase('mail', 'field')}>
             <label htmlFor="config-email">Mail</label>
             <input id="config-email" type="email" value={email} onChange={(event) => setEmail(event.target.value)} required />
           </div>
         </div>
         <div className="auth-row">
-          <div className="field">
+          <div className={g.clase('altura', 'field')}>
             <label htmlFor="config-altura">Altura (cm)</label>
             <input id="config-altura" type="number" min="1" max="299" step="0.1" value={altura} onChange={(event) => setAltura(event.target.value)} required />
           </div>
-          <div className="field">
+          <div className={g.clase('peso', 'field')}>
             <label htmlFor="config-peso">Peso (kg)</label>
             <input id="config-peso" type="number" min="1" max="499" step="0.1" value={peso} onChange={(event) => setPeso(event.target.value)} required />
           </div>
         </div>
         <div className="auth-row">
-          <div className="field">
+          <div className={g.clase('nacimiento', 'field')}>
             <label htmlFor="config-nacimiento">Fecha de nacimiento</label>
             <input id="config-nacimiento" type="date" value={nacimiento} onChange={(event) => setNacimiento(event.target.value)} required />
           </div>
-          <div className="field">
+          <div className={g.clase('sexo', 'field')}>
             <label htmlFor="config-sexo">Sexo</label>
             <select id="config-sexo" value={sexo} onChange={(event) => setSexo(event.target.value as Sexo)} required>
               <option value="F">Femenino</option>
@@ -334,7 +431,7 @@ function ConfiguracionPaciente({ datos, token }: { datos: PacientePerfil; token:
             </select>
           </div>
         </div>
-        <div className="field enfermedades-field">
+        <div className={g.clase('enfermedades', 'field enfermedades-field')}>
           <span>Enfermedades preexistentes</span>
           <div className="enfermedades-options">
             {OPCIONES_ENFERMEDADES.map(({ valor, etiqueta }) => (
@@ -349,7 +446,7 @@ function ConfiguracionPaciente({ datos, token }: { datos: PacientePerfil; token:
             ))}
           </div>
         </div>
-        <label className="field-check">
+        <label className={g.clase('fumador', 'field-check')}>
           <input type="checkbox" checked={fumador} onChange={(event) => setFumador(event.target.checked)} />
           <span>Soy fumador/a.</span>
         </label>
@@ -381,10 +478,9 @@ function ConfiguracionPaciente({ datos, token }: { datos: PacientePerfil; token:
           </button>
         )}
 
-        <button className="btn btn-teal btn-block" disabled={enviando} type="submit">
-          {enviando ? 'Guardando…' : 'Guardar cambios'}
-        </button>
+        <BotonGuardar enviando={enviando} recienGuardado={g.recienGuardado} />
       </form>
+      <AvisoFlotante aviso={g.aviso} onCerrar={g.cerrarAviso} />
 
       {confirmarCambio && (
         <Modal

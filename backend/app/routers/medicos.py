@@ -6,6 +6,7 @@ from sqlalchemy.orm import Session
 
 from app.core.database import get_db
 from app.core import entrenamientos_dispositivo
+from app.core.borrado_mediciones import borrar_evaluacion_completa
 from app.core.deps import get_current_medico
 from app.core.security import hashear_secreto, verificar_secreto
 from app.core.timezone import hoy_argentina
@@ -321,6 +322,30 @@ def muestras_de_evaluacion(
         raise HTTPException(status_code=404, detail="Esa evaluación no tiene curva cargada.")
 
     return muestras
+
+
+@router.delete("/me/pacientes/{id_paciente}/evaluaciones/{id_evaluacion}", status_code=204)
+def borrar_evaluacion_de_paciente(
+    id_paciente: int,
+    id_evaluacion: int,
+    medico: Medico = Depends(get_current_medico),
+    db: Session = Depends(get_db),
+):
+    """
+    Borra una evaluación (espirometría o PIM) con su curva y sus notas. No se
+    puede deshacer. Si vino del equipo y la vuelve a mandar al sincronizar,
+    la web no la crea de nuevo (ver app/core/borrado_mediciones.py).
+    """
+    _exigir_vinculo(medico, id_paciente, db)
+    evaluacion = (
+        db.query(Evaluacion)
+        .filter(Evaluacion.id_evaluacion == id_evaluacion, Evaluacion.id_paciente == id_paciente)
+        .first()
+    )
+    if evaluacion is None:
+        raise HTTPException(status_code=404, detail="No existe esa evaluación para ese paciente.")
+    borrar_evaluacion_completa(db, evaluacion)
+    db.commit()
 
 
 @router.get("/me/pacientes/{id_paciente}/frecuencia", response_model=list[FrecuenciaOut])

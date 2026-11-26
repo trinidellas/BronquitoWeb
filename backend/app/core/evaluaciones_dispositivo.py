@@ -19,6 +19,9 @@ Lo que cambia entre la SD y la web:
 Qué no aparece en la web (queda sólo en `archivos_dispositivo`):
   - Las espirometrías que no pasaron la validación (`"valida": false`).
   - La PIM "en cero" que guarda el equipo cuando no tiene sensor de PIM.
+  - Las que un médico borró (`motivo_oculta` = "borrada_por_medico"): si el
+    equipo las vuelve a mandar, se contesta que llegaron pero no se crean de
+    nuevo. El equipo no repite nunca un nombre de archivo.
 """
 
 import hashlib
@@ -229,6 +232,39 @@ def completar_inspiracion(db: Session) -> int:
     return corregidas
 
 
+MOTIVO_BORRADA = "borrada_por_medico"
+
+
+def fue_borrada(db: Session, id_paciente: int, archivo: str) -> bool:
+    """Si un médico borró la prueba `archivo` de ese paciente."""
+    return (
+        db.query(ArchivoDispositivo.id_archivo)
+        .filter(
+            ArchivoDispositivo.id_paciente == id_paciente,
+            ArchivoDispositivo.nombre == archivo,
+            ArchivoDispositivo.motivo_oculta == MOTIVO_BORRADA,
+        )
+        .first()
+    ) is not None
+
+
+def borrar_evaluacion(db: Session, evaluacion: Evaluacion) -> None:
+    """
+    Borra la evaluación y su curva. Si vino del equipo, su archivo queda en
+    `archivos_dispositivo` marcado como borrado (sin evaluación), así no se
+    vuelve a crear si el equipo lo manda de nuevo. Las notas y la marca de
+    oculta las borra quien llama.
+    """
+    db.query(ArchivoDispositivo).filter(ArchivoDispositivo.id_evaluacion == evaluacion.id_evaluacion).update(
+        {ArchivoDispositivo.id_evaluacion: None, ArchivoDispositivo.motivo_oculta: MOTIVO_BORRADA},
+        synchronize_session=False,
+    )
+    db.query(EvaluacionMuestra).filter(EvaluacionMuestra.id_evaluacion == evaluacion.id_evaluacion).delete(
+        synchronize_session=False,
+    )
+    db.delete(evaluacion)
+
+
 def _fecha_en_id(*ids: str | None) -> datetime | None:
     """La hora que va en el nombre: "eval_20261030_162009_ESP" -> 30/10/2026 16:20:09."""
     for texto in ids:
@@ -312,6 +348,9 @@ def guardar_prueba(db: Session, paciente: Paciente, archivo: str, resumen: dict,
       - visible: si aparece en la web.
       - id_evaluacion: la evaluación de la web (null si no aparece).
     """
+    if fue_borrada(db, paciente.id_paciente, archivo):
+        return {"estado": "borrada", "visible": False, "id_evaluacion": None}
+
     marca = huella(resumen, csv)
     existente = (
         db.query(ArchivoDispositivo)
