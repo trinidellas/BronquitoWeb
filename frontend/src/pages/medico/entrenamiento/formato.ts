@@ -14,7 +14,7 @@ import { formatearHora } from '../../../data/mockData'
  *       - la curva de presión se da vuelta si la sesión la trae positiva al
  *         inspirar (ver `presionPositivaAlInspirar`).
  *   - La caída de la PIM se muestra como viene (> 0 = cayó); su pendiente,
- *     en la misma convención que la PIM que se muestra.
+ *     sobre la fuerza (|PIM|): negativa = perdió fuerza, como la ve el médico.
  */
 
 export const SIN_DATO = '--'
@@ -43,16 +43,19 @@ export function picoFlujo(valor: number | null | undefined): number | null {
 }
 
 /**
- * La pendiente de la PIM (cmH₂O por ciclo) en la misma convención que la
- * PIM que se muestra (negativa). El equipo la calcula sobre la PIM con su
- * propio signo: si mandó la PIM positiva (formato viejo), va al revés.
+ * La pendiente de la PIM (cmH₂O por ciclo) sobre la FUERZA (|PIM|):
+ * negativa = la PIM perdió fuerza a lo largo de la sesión (fatiga), positiva
+ * = ganó. Así se lee igual que la caída de la PIM aunque la PIM se muestre
+ * negativa. El equipo la calcula sobre la PIM con su propio signo: si la
+ * mandó positiva (como hasta ahora) ya está sobre la fuerza; si la mandara
+ * negativa, va al revés.
  */
-export function pendientePimClinica(
+export function pendienteFuerzaPim(
   pendiente: number | null | undefined,
   pimDelEquipo: number | null | undefined,
 ): number | null {
   if (pendiente == null) return null
-  return pimDelEquipo != null && pimDelEquipo > 0 ? 0 - pendiente : pendiente
+  return pimDelEquipo != null && pimDelEquipo < 0 ? 0 - pendiente : pendiente
 }
 
 function masCercano(tiempo: number[], t: number): number {

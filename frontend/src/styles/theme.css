@@ -2663,6 +2663,26 @@ button.cal-ribbon {
   margin: 14px 0;
 }
 
+/* En pantallas anchas, el de presiones (con la caída y la pendiente de la
+   PIM y sus "i") es un poco más ancho que los otros tres, así la etiqueta y
+   el valor de cada dato entran en una sola línea. */
+@media (min-width: 1200px) {
+  .ent-grupos {
+    grid-template-columns: 0.92fr 1.24fr 0.92fr 0.92fr;
+  }
+  .ent-grupo-ancho .ent-metrica dt,
+  .ent-grupo-ancho .ent-metrica dd {
+    white-space: nowrap;
+  }
+}
+
+/* Más angosto, las cuatro en una fila no entran: de a dos. */
+@media (min-width: 640px) and (max-width: 1199px) {
+  .ent-grupos {
+    grid-template-columns: repeat(2, 1fr);
+  }
+}
+
 .ent-grupo h4 {
   margin: 0 0 8px;
   font-family: 'Baloo 2';
@@ -2696,7 +2716,52 @@ button.cal-ribbon {
   color: var(--ink);
 }
 
+/* La "i" roja que explica un dato (InfoAyuda) y su globito. */
+.info-ayuda {
+  position: relative;
+  display: inline-flex;
+  vertical-align: middle;
+  margin-left: 5px;
+}
+
+.info-ayuda-boton {
+  width: 16px;
+  height: 16px;
+  padding: 0;
+  border: none;
+  border-radius: 50%;
+  background: var(--bad);
+  color: #fff;
+  font: italic 700 11px/16px Georgia, 'Times New Roman', serif;
+  text-align: center;
+  cursor: pointer;
+}
+
+.info-ayuda-boton:focus-visible {
+  outline: none;
+  box-shadow: var(--focus-ring);
+}
+
+.info-ayuda-globo {
+  position: absolute;
+  top: calc(100% + 6px);
+  left: -10px;
+  z-index: 30;
+  width: 260px;
+  padding: 10px 12px;
+  border-radius: var(--radius-sm);
+  background: var(--ink);
+  color: #fff;
+  font-size: 12.5px;
+  font-weight: 600;
+  line-height: 1.45;
+  text-align: left;
+  box-shadow: var(--shadow);
+}
+
 .ent-metrica-detalle {
+  /* Abajo del valor ("ciclo 7", "perdió fuerza"): así el valor no se parte. */
+  display: block;
   font-weight: 600;
   font-size: 12px;
   color: #5c7c82;

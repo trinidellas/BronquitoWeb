@@ -4,6 +4,7 @@ import type { Entrenamiento } from '../../../api/types'
 import { ApiError, api } from '../../../api/client'
 import { useSession } from '../../../auth/session'
 import { TrainingViewer } from './TrainingViewer'
+import { useSacarDelResumen } from '../useSacarDelResumen'
 
 /**
  * Página del visor de una sesión de entrenamiento, igual que la de
@@ -50,6 +51,19 @@ export function TrainingSignalPage() {
     }
   }, [entrenamientos, idEntrenamiento])
 
+  const actual = entrenamientos.find((e) => e.id_entrenamiento === Number(idEntrenamiento))
+  const sacarDelResumen = useSacarDelResumen(
+    token,
+    Number(idPaciente),
+    'entrenamiento',
+    actual ? [actual.id_entrenamiento] : [],
+    actual?.oculta ?? false,
+    (ids, oculta) => {
+      const cuales = new Set(ids)
+      setEntrenamientos((lista) => lista.map((e) => (cuales.has(e.id_entrenamiento) ? { ...e, oculta } : e)))
+    },
+  )
+
   function irA(destino: Entrenamiento) {
     navigate(`/medico/pacientes/${idPaciente}/entrenamientos/${destino.id_entrenamiento}`)
   }
@@ -62,6 +76,7 @@ export function TrainingSignalPage() {
       idPaciente={Number(idPaciente)}
       idEntrenamiento={Number(idEntrenamiento)}
       onVolver={() => navigate(`/?paciente=${idPaciente}&pestana=entrenamiento`)}
+      sacarDelResumen={actual ? sacarDelResumen : undefined}
       onAnterior={anterior ? () => irA(anterior) : undefined}
       onSiguiente={siguiente ? () => irA(siguiente) : undefined}
       onUltima={ultima ? () => irA(ultima) : undefined}

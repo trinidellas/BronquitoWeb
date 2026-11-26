@@ -4,6 +4,7 @@ import type { Evaluacion } from '../../api/types'
 import { ApiError, api } from '../../api/client'
 import { useSession } from '../../auth/session'
 import { SignalViewer } from './SignalViewer'
+import { useSacarDelResumen } from './useSacarDelResumen'
 
 /**
  * Dos evaluaciones son de la "misma sesión" si comparten el `fecha_hora`
@@ -85,6 +86,20 @@ export function EvaluationSignalPage() {
     [evaluaciones, evaluacion],
   )
 
+  // "Sacar del resumen" va por sesión (espirometría y PIM juntas), como el
+  // ojito de la tabla de evaluaciones de la ficha.
+  const sacarDelResumen = useSacarDelResumen(
+    token,
+    Number(idPaciente),
+    'evaluacion',
+    evaluacionesDeLaSesion.map((e) => e.id_evaluacion),
+    evaluacionesDeLaSesion.length > 0 && evaluacionesDeLaSesion.every((e) => e.oculta),
+    (ids, oculta) => {
+      const cuales = new Set(ids)
+      setEvaluaciones((actuales) => actuales.map((e) => (cuales.has(e.id_evaluacion) ? { ...e, oculta } : e)))
+    },
+  )
+
   function irA(destino: Evaluacion) {
     navigate(`/medico/pacientes/${idPaciente}/evaluaciones/${destino.id_evaluacion}`)
   }
@@ -111,6 +126,7 @@ export function EvaluationSignalPage() {
       onVolver={() => navigate(`/?paciente=${idPaciente}&pestana=evaluaciones`)}
       onCambiarTipo={cambiarTipo}
       avisoTipo={avisoTipo}
+      sacarDelResumen={sacarDelResumen}
       onAnterior={anterior ? () => irA(anterior) : undefined}
       onSiguiente={siguiente ? () => irA(siguiente) : undefined}
       onUltima={ultima ? () => irA(ultima) : undefined}

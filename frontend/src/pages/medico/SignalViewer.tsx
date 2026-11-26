@@ -11,6 +11,8 @@ import { formatearFecha, formatearHora } from '../../data/mockData'
 import { GRAFICOS_POR_TIPO, csvDeSenales, fechaParaArchivo } from './graficosSenales'
 import type { PuntoAnotado } from './NotasSesionPanel'
 import { NotasSesionPanel } from './NotasSesionPanel'
+import type { EstadoOculta } from './SacarDelResumen'
+import { AvisoOculta, BotonSacarDelResumen } from './SacarDelResumen'
 
 interface SignalViewerProps {
   idPaciente: number
@@ -22,6 +24,8 @@ interface SignalViewerProps {
   onCambiarTipo: () => void
   /** Mensaje a mostrar cuando `onCambiarTipo` no encontró una señal del otro tipo. */
   avisoTipo: string | null
+  /** Marcar la sesión como fallida (fuera de los gráficos de evolución, el CSV y el informe). */
+  sacarDelResumen: EstadoOculta
   onAnterior?: () => void
   onSiguiente?: () => void
   onUltima?: () => void
@@ -35,6 +39,7 @@ export function SignalViewer({
   onVolver,
   onCambiarTipo,
   avisoTipo,
+  sacarDelResumen,
   onAnterior,
   onSiguiente,
   onUltima,
@@ -206,6 +211,7 @@ export function SignalViewer({
         </h3>
 
         <div className="signal-header-acciones">
+          <BotonSacarDelResumen estado={sacarDelResumen} que="esta sesión (espirometría y PIM)" />
           <button
             className="btn btn-outline btn-sm"
             onClick={descargarCsv}
@@ -226,6 +232,7 @@ export function SignalViewer({
       </div>
 
       {avisoTipo && <p className="empty-state mt-16">{avisoTipo}</p>}
+      <AvisoOculta estado={sacarDelResumen} que="esta sesión (espirometría y PIM)" />
       {errorExportacion && <div className="auth-alert error">{errorExportacion}</div>}
 
       {cargando ? (

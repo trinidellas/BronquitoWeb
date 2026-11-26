@@ -4,6 +4,7 @@ import { ApiError, api } from '../../../api/client'
 import { useSession } from '../../../auth/session'
 import type { FranjaXY, MarcaXY } from '../../../components/ui/SignalXYChart'
 import { SignalXYChart } from '../../../components/ui/SignalXYChart'
+import { InfoAyuda } from '../../../components/ui/InfoAyuda'
 import { CursorContext, indiceMasCercano, useCursorNuevo } from '../../../components/ui/cursorSincronizado'
 import { describirPuntoXY, marcadoresDe } from '../../../anotaciones/notas'
 import {
@@ -15,11 +16,15 @@ import {
 import { NotasSesionPanel } from '../NotasSesionPanel'
 import type { PuntoAnotado } from '../NotasSesionPanel'
 import * as f from './formato'
+import type { EstadoOculta } from '../SacarDelResumen'
+import { AvisoOculta, BotonSacarDelResumen } from '../SacarDelResumen'
 
 interface TrainingViewerProps {
   idPaciente: number
   idEntrenamiento: number
   onVolver: () => void
+  /** Marcar la sesión como fallida (fuera de los gráficos de evolución, el CSV y el informe). */
+  sacarDelResumen?: EstadoOculta
   onAnterior?: () => void
   onSiguiente?: () => void
   onUltima?: () => void
@@ -180,7 +185,18 @@ interface Metrica {
   etiqueta: string
   valor: string
   detalle?: string
+  /** Si está, al lado de la etiqueta va una "i" roja que lo explica. */
+  ayuda?: string
 }
+
+const AYUDA_CAIDA_PIM =
+  'Compara la fuerza de la PIM del último tercio de los ciclos con la del primer tercio: ' +
+  '(primeros − últimos) / primeros × 100. Positiva = la PIM cayó (fatiga); negativa = subió. ' +
+  'Solo mira el principio y el final de la sesión.'
+const AYUDA_PENDIENTE_PIM =
+  'Cuánto cambia la fuerza de la PIM por ciclo, según una recta ajustada a todos los ciclos. ' +
+  'Negativa = perdió fuerza a lo largo de la sesión (fatiga); positiva = ganó. ' +
+  'Como usa todos los ciclos, un ciclo raro al principio o al final pesa menos que en la caída.'
 
 function GrupoMetricas({ titulo, metricas, className = '' }: { titulo: string; metricas: Metrica[]; className?: string }) {
   return (
@@ -189,7 +205,10 @@ function GrupoMetricas({ titulo, metricas, className = '' }: { titulo: string; m
       <dl className="ent-metricas">
         {metricas.map((m) => (
           <div key={m.etiqueta} className="ent-metrica">
-            <dt>{m.etiqueta}</dt>
+            <dt>
+              {m.etiqueta}
+              {m.ayuda && <InfoAyuda sobre={m.etiqueta} texto={m.ayuda} />}
+            </dt>
             <dd>
               {m.valor}
               {m.detalle && <span className="ent-metrica-detalle">{m.detalle}</span>}
@@ -202,7 +221,15 @@ function GrupoMetricas({ titulo, metricas, className = '' }: { titulo: string; m
 }
 
 /** Visor de una sesión de entrenamiento: datos de la sesión, métricas, señales por ciclo y tabla. */
-export function TrainingViewer({ idPaciente, idEntrenamiento, onVolver, onAnterior, onSiguiente, onUltima }: TrainingViewerProps) {
+export function TrainingViewer({
+  idPaciente,
+  idEntrenamiento,
+  onVolver,
+  sacarDelResumen,
+  onAnterior,
+  onSiguiente,
+  onUltima,
+}: TrainingViewerProps) {
   const { token } = useSession()
   const [sesion, setSesion] = useState<EntrenamientoDetalle | null>(null)
   const [senal, setSenal] = useState<SenalEntrenamiento | null>(null)
@@ -266,14 +293,16 @@ export function TrainingViewer({ idPaciente, idEntrenamiento, onVolver, onAnteri
     return () => window.removeEventListener('keydown', alTeclear)
   }, [ciclos.length])
 
-  // La señal completa: tiempo desde el inicio del CSV (así coincide con los
-  // t_*_s del JSON), la presión con la inspiración en negativo (como la manda
-  // el equipo; las sesiones viejas la traían al revés y se dan vuelta) y el
-  // flujo procesado (el de las métricas); si el CSV no lo trae, el crudo.
+  // La señal completa: el tiempo tal cual viene del CSV (tiempo_ms / 1000).
+  // No se le resta la primera muestra: el equipo calcula los t_*_s del JSON
+  // con ese mismo tiempo, y si se restara (la primera muestra es 0,01 s) cada
+  // punto de PIM/PEM/PIF/PEF quedaría 10 ms corrido de su pico. La presión va
+  // con la inspiración en negativo (como la manda el equipo; las sesiones
+  // viejas la traían al revés y se dan vuelta) y el flujo procesado (el de
+  // las métricas); si el CSV no lo trae, el crudo.
   const completa = useMemo(() => {
     if (!senal || senal.tiempo_s.length === 0) return null
-    const t0 = senal.tiempo_s[0]
-    const tiempo = senal.tiempo_s.map((t) => t - t0)
+    const tiempo = senal.tiempo_s
     const procesado = senal.flujo_proc_lmin != null
     const momentosPim = ciclos.flatMap((c) => (c.t_pim_s != null ? [c.t_pim_s] : []))
     const darVuelta = f.presionPositivaAlInspirar(tiempo, senal.presion_cmh2o, momentosPim, senal.flujo_proc_lmin)
@@ -392,6 +421,7 @@ export function TrainingViewer({ idPaciente, idEntrenamiento, onVolver, onAnteri
   const p = sesion.promedios
   const m = sesion.multiciclo
 
+  const pendientePim = f.pendienteFuerzaPim(m?.pendiente_pim_por_ciclo, p?.pim_cmH2O ?? m?.pim_max_cmH2O)
   const grupos: { titulo: string; metricas: Metrica[] }[] = [
     {
       titulo: 'Sesión',
@@ -411,10 +441,17 @@ export function TrainingViewer({ idPaciente, idEntrenamiento, onVolver, onAnteri
         { etiqueta: 'PIM máxima', valor: f.num(f.pimClinica(m?.pim_max_cmH2O), 1, 'cmH₂O'), detalle: f.enCiclo(m?.pim_max_ciclo) },
         { etiqueta: 'PEM promedio', valor: f.num(f.pemClinica(p?.pem_cmH2O), 1, 'cmH₂O') },
         { etiqueta: 'PEM máxima', valor: f.num(f.pemClinica(m?.pem_max_cmH2O), 1, 'cmH₂O'), detalle: f.enCiclo(m?.pem_max_ciclo) },
-        { etiqueta: 'Caída de la PIM', valor: f.num(m?.caida_pim_pct, 1, '%'), detalle: m?.caida_pim_pct != null ? (m.caida_pim_pct > 0 ? ' cayó' : ' no cayó') : undefined },
+        {
+          etiqueta: 'Caída de la PIM',
+          valor: f.num(m?.caida_pim_pct, 1, '%'),
+          detalle: m?.caida_pim_pct != null ? (m.caida_pim_pct > 0 ? ' cayó' : ' no cayó') : undefined,
+          ayuda: AYUDA_CAIDA_PIM,
+        },
         {
           etiqueta: 'Pendiente de la PIM',
-          valor: f.num(f.pendientePimClinica(m?.pendiente_pim_por_ciclo, p?.pim_cmH2O ?? m?.pim_max_cmH2O), 2, 'cmH₂O/ciclo'),
+          valor: f.num(pendientePim, 2, 'cmH₂O/ciclo'),
+          detalle: pendientePim != null && pendientePim !== 0 ? (pendientePim < 0 ? ' perdió fuerza' : ' ganó fuerza') : undefined,
+          ayuda: AYUDA_PENDIENTE_PIM,
         },
       ],
     },
@@ -482,7 +519,15 @@ export function TrainingViewer({ idPaciente, idEntrenamiento, onVolver, onAnteri
           Ir a última sesión
         </button>
         <h3>Entrenamiento · {f.fecha(sesion)}</h3>
+
+        {sacarDelResumen && (
+          <div className="signal-header-acciones">
+            <BotonSacarDelResumen estado={sacarDelResumen} que="este entrenamiento" />
+          </div>
+        )}
       </div>
+
+      {sacarDelResumen && <AvisoOculta estado={sacarDelResumen} que="este entrenamiento" />}
 
       <div className="card ent-encabezado">
         <div>
@@ -524,7 +569,12 @@ export function TrainingViewer({ idPaciente, idEntrenamiento, onVolver, onAnteri
       ) : (
         <div className="ent-grupos">
           {grupos.map((g) => (
-            <GrupoMetricas key={g.titulo} titulo={g.titulo} metricas={g.metricas} />
+            <GrupoMetricas
+              key={g.titulo}
+              titulo={g.titulo}
+              metricas={g.metricas}
+              className={g.titulo === 'Presiones' ? 'ent-grupo-ancho' : ''}
+            />
           ))}
         </div>
       )}
